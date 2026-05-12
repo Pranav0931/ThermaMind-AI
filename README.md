@@ -33,7 +33,7 @@ npm install
 npm run dev
 ```
 
-3. Open `http://localhost:3000`
+3. Open `http://localhost:3000` (or the port shown in terminal, e.g. `http://localhost:3001` if 3000 is occupied)
 
 ## Available Scripts
 

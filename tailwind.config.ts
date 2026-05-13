@@ -29,8 +29,8 @@ const config: Config = {
         innerglass: "inset 0 1px 0 rgba(255,255,255,0.14)",
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "Inter", "system-ui", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "SFMono-Regular", "Consolas", "monospace"],
+        sans: ["Inter", "Segoe UI", "system-ui", "sans-serif"],
+        mono: ["SFMono-Regular", "Consolas", "Liberation Mono", "monospace"],
       },
       backgroundImage: {
         "radial-grid":

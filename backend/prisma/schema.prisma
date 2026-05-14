@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model SensorData {
+  id          Int      @id @default(autoincrement())
+  zone        String
+  temperature Float
+  humidity    Float
+  co2         Float
+  occupancy   Int
+  timestamp   DateTime @default(now())
+}
+
+model SystemStatus {
+  id             Int      @id @default(autoincrement())
+  efficiency     Float
+  load           Float
+  coolingScore   Float
+  timestamp      DateTime @default(now())
+}

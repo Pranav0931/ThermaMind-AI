@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error": "#ffb4ab",
+                        "surface-bright": "#363a3c",
+                        "on-primary": "#00363e",
+                        "secondary-container": "#00a572",
+                        "on-background": "#e0e3e6",
+                        "surface-tint": "#2fd9f4",
+                        "inverse-on-surface": "#2d3133",
+                        "on-primary-fixed-variant": "#004e5a",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "surface-container-highest": "#313538",
+                        "inverse-surface": "#e0e3e6",
+                        "inverse-primary": "#006877",
+                        "on-tertiary-container": "#a0002f",
+                        "tertiary-container": "#ffaaaf",
+                        "secondary": "#4edea3",
+                        "on-surface-variant": "#bbc9cd",
+                        "primary-container": "#22d3ee",
+                        "on-secondary-fixed": "#002113",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#40000d",
+                        "secondary-fixed-dim": "#4edea3",
+                        "on-error-container": "#ffdad6",
+                        "surface": "#101416",
+                        "on-surface": "#e0e3e6",
+                        "on-primary-container": "#005763",
+                        "on-primary-fixed": "#001f25",
+                        "surface-container-low": "#181c1e",
+                        "surface-container-high": "#272a2d",
+                        "on-secondary": "#003824",
+                        "secondary-fixed": "#6ffbbe",
+                        "outline": "#859397",
+                        "tertiary-fixed": "#ffdadb",
+                        "primary-fixed-dim": "#2fd9f4",
+                        "primary": "#8aebff",
+                        "tertiary": "#ffd2d3",
+                        "primary-fixed": "#a2eeff",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "on-secondary-container": "#00311f",
+                        "on-secondary-fixed-variant": "#005236",
+                        "outline-variant": "#3c494c",
+                        "on-tertiary": "#67001b",
+                        "surface-dim": "#101416",
+                        "on-error": "#690005",
+                        "surface-variant": "#313538",
+                        "surface-container": "#1c2022",
+                        "surface-container-lowest": "#0b0f11",
+                        "background": "#101416"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "element-gap": "16px",
+                        "container-padding-mobile": "24px",
+                        "gutter": "24px",
+                        "unit": "8px",
+                        "container-padding-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "display-lg-mobile": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "300"}],
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "display-lg-mobile": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "300"}],
+                        "label-md": ["14px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-surface {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(47, 217, 244, 0.2);
+        }
+        .glow-emerald {
+            box-shadow: 0 0 20px rgba(78, 222, 163, 0.2);
+        }
+        .active-glow {
+            box-shadow: 0 0 15px rgba(138, 235, 255, 0.4);
+        }
+        .mesh-bg {
+            background-color: #05080A;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(47, 217, 244, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(78, 222, 163, 0.1) 0px, transparent 50%);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #8aebff;
+            box-shadow: 0 0 12px #8aebff;
+            cursor: pointer;
+            margin-top: -10px;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style data-stitch-cursor="">*{cursor:crosshair!important}[contenteditable="true"]:focus,.cursor-text:focus{cursor:text!important}</style><style data-stitch-scroll-lock="">html,body{overflow:hidden!important}</style></head>
+<body class="bg-background text-on-background font-body-md text-body-md mesh-bg min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-container-padding-mobile h-16 bg-surface/10 dark:bg-surface-container-lowest/10 backdrop-blur-3xl border-b border-white/15 shadow-[0_0_20px_rgba(47,217,244,0.15)]">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[28px]" data-icon="blur_on">blur_on</span>
+<h1 class="font-headline-md text-headline-md bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">ThermaMind AI</h1>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant hover:backdrop-brightness-125 transition-all active:scale-95 duration-300 cursor-pointer" data-icon="account_circle">account_circle</span>
+</div>
+</header>
+<main class="flex-1 mt-20 mb-32 px-container-padding-mobile flex flex-col gap-element-gap">
+<!-- Environment Variables Section -->
+<section class="flex flex-col gap-4">
+<div class="flex flex-col gap-1">
+<h2 class="font-label-md text-label-md text-secondary uppercase tracking-widest">Training Lab</h2>
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile">Environmental Monitoring</h3>
+</div>
+<div class="glass-surface rounded-3xl p-6 flex flex-col gap-8 glow-cyan">
+<!-- Temperature Slider -->
+<div class="flex flex-col gap-4">
+<div class="flex justify-between items-end">
+<div class="flex flex-col gap-1">
+<span class="text-on-surface-variant font-label-md text-label-md">TEMPERATURE</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="device_thermostat">device_thermostat</span>
+<span class="font-headline-md text-headline-md text-primary">22.4°C</span>
+</div>
+</div>
+<span class="text-on-surface-variant/40 font-label-md text-label-md">Cooling Stable</span>
+</div>
+<input class="w-full appearance-none bg-transparent focus:outline-none" max="30" min="16" step="0.1" type="range" value="22.4"/>
+</div>
+<!-- Humidity Slider -->
+<div class="flex flex-col gap-4">
+<div class="flex justify-between items-end">
+<div class="flex flex-col gap-1">
+<span class="text-on-surface-variant font-label-md text-label-md">HUMIDITY</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" data-icon="humidity_low">humidity_low</span>
+<span class="font-headline-md text-headline-md text-secondary">48%</span>
+</div>
+</div>
+<span class="text-on-surface-variant/40 font-label-md text-label-md">Humidity Controlled</span>
+</div>
+<input class="w-full appearance-none bg-transparent focus:outline-none" max="80" min="20" type="range" value="48"/>
+</div>
+</div>
+</section>
+<!-- RL Adaptation Graph -->
+<section class="flex flex-col gap-4">
+<div class="flex justify-between items-center">
+</div>
+</section>
+<!-- Scenario Simulation -->
+<section class="flex flex-col gap-4">
+<h3 class="font-headline-md text-headline-md">Operational Simulation</h3>
+<div class="grid grid-cols-2 gap-4">
+<button class="glass-surface rounded-2xl p-5 flex flex-col items-center gap-3 active:scale-95 transition-all glow-cyan group">
+<div class="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center border border-error/20 group-hover:bg-error/20 transition-colors">
+<span class="material-symbols-outlined text-error" data-icon="wb_sunny">wb_sunny</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">External Heatwave</span>
+</button>
+<button class="glass-surface rounded-2xl p-5 flex flex-col items-center gap-3 active:scale-95 transition-all glow-emerald group">
+<div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center border border-secondary/20 group-hover:bg-secondary/20 transition-colors">
+<span class="material-symbols-outlined text-secondary" data-icon="groups">groups</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Warehouse Activity Surge</span>
+</button>
+<button class="glass-surface rounded-2xl p-5 flex flex-col items-center gap-3 active:scale-95 transition-all glow-cyan group"><div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:bg-primary/20 transition-colors"><span class="material-symbols-outlined text-primary" data-icon="settings_input_component">settings_input_component</span></div><span class="font-label-md text-label-md text-on-surface-variant uppercase">Compressor Scheduling</span></button><button class="glass-surface rounded-2xl p-5 flex flex-col items-center gap-3 active:scale-95 transition-all glow-emerald group"><div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center border border-secondary/20 group-hover:bg-secondary/20 transition-colors"><span class="material-symbols-outlined text-secondary" data-icon="air">air</span></div><span class="font-label-md text-label-md text-on-surface-variant uppercase">Airflow Scheduling</span></button></div>
+</section>
+<!-- Direct Feedback Section -->
+<section class="flex flex-col gap-4">
+<h3 class="font-headline-md text-headline-md">Operational Notes</h3>
+<div class="glass-surface rounded-2xl p-4 glow-cyan">
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/40 resize-none font-body-md" placeholder="Log HVAC observations, operational issues, or cooling anomalies." rows="3"></textarea>
+<div class="flex justify-end mt-2">
+<button class="px-4 py-2 bg-primary/20 text-primary border border-primary/30 rounded-full font-label-md uppercase tracking-wider text-xs active:scale-95 transition-transform">Log Entry</button>
+</div>
+</div>
+</section>
+<!-- System Scheduling Section -->
+<section class="flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md">HVAC Scheduling</h3><span class="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-bold uppercase tracking-wider">Warehouse Operating Hours: 07:00 - 22:00</span>
+<span class="material-symbols-outlined text-secondary" data-icon="calendar_today">calendar_today</span>
+</div>
+<div class="glass-surface rounded-3xl p-6 glow-emerald flex flex-col gap-6">
+<div class="relative pl-8 border-l border-white/10 flex flex-col gap-8">
+<!-- Morning Block -->
+<div class="relative">
+<div class="absolute -left-[41px] top-0 w-4 h-4 rounded-full bg-primary-fixed-dim border-4 border-background outline outline-1 outline-white/10"></div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest">07:00 AM - 09:00 AM</span>
+<div class="flex justify-between items-center">
+<span class="font-body-lg font-medium text-on-surface">Morning HVAC Startup</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="edit">edit</span>
+</div>
+</div>
+</div>
+<!-- Peak Efficiency Block -->
+<div class="relative">
+<div class="absolute -left-[41px] top-0 w-4 h-4 rounded-full bg-secondary border-4 border-background outline outline-1 outline-white/10 shadow-[0_0_10px_rgba(78,222,163,0.5)]"></div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-label-md text-secondary uppercase tracking-widest">09:00 AM - 05:00 PM</span>
+<span class="px-1.5 py-0.5 bg-secondary/10 text-[8px] text-secondary border border-secondary/20 rounded uppercase font-bold">Active</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body-lg font-medium text-on-surface">Operational Cooling Window</span>
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="check_circle">check_circle</span>
+</div>
+</div>
+</div>
+<!-- Evening Block -->
+<div class="relative">
+<div class="absolute -left-[41px] top-0 w-4 h-4 rounded-full bg-white/20 border-4 border-background outline outline-1 outline-white/10"></div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest">05:00 PM - 10:00 PM</span>
+<div class="flex justify-between items-center">
+<span class="font-body-lg font-medium text-on-surface-variant">Reduced Load Cooling</span>
+<span class="material-symbols-outlined text-on-surface-variant/40 text-sm" data-icon="more_vert">more_vert</span>
+</div>
+</div>
+</div>
+</div><div class="flex items-center gap-4 py-2 border-t border-white/5"><div class="flex items-center gap-1.5 text-primary"><span class="material-symbols-outlined text-sm" data-icon="bolt">bolt</span><span class="text-[10px] font-label-md uppercase">Peak-hour Optimization</span></div><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-sm" data-icon="timeline">timeline</span><span class="text-[10px] font-label-md uppercase">Cooling Automation Timeline</span></div></div>
+<button class="w-full py-4 border border-dashed border-white/20 rounded-2xl text-on-surface-variant/60 font-label-md flex items-center justify-center gap-2 hover:bg-white/5 transition-colors active:scale-[0.98]"><span class="material-symbols-outlined text-sm" data-icon="add">add</span> ADD HVAC SCHEDULE</button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center pt-4 pb-8 px-6 bg-surface/10 dark:bg-surface-container-low/20 backdrop-blur-[50px] rounded-t-[32px] border-t border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.3)]">
+<div class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary transition-colors active:scale-90 duration-500 ease-out cursor-pointer"><span class="material-symbols-outlined" data-icon="dashboard">dashboard</span><span class="font-label-md text-label-md">Dashboard</span></div>
+<div class="flex flex-col items-center justify-center active:scale-90 duration-500 ease-out cursor-pointer text-on-surface-variant/60 hover:text-primary"><span class="material-symbols-outlined" data-icon="psychology_alt">psychology_alt</span><span class="font-label-md text-label-md">Insights</span></div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant/60 hover:text-primary transition-colors active:scale-90 duration-500 ease-out cursor-pointer"><span class="material-symbols-outlined" data-icon="bolt">bolt</span><span class="font-label-md text-label-md">Energy</span></div>
+<div class="flex flex-col items-center justify-center text-secondary drop-shadow-[0_0_8px_rgba(78,222,163,0.5)] active:scale-90 duration-500 ease-out cursor-pointer"><span class="material-symbols-outlined" data-icon="calendar_today" style='font-variation-settings: "FILL" 1;'>calendar_today</span><span class="font-label-md text-label-md">Schedule</span></div>
+</nav>
+</body></html>

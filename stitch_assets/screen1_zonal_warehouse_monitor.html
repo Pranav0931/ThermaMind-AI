@@ -1,0 +1,287 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#ffd2d3",
+                        "primary-fixed": "#a2eeff",
+                        "on-secondary-fixed-variant": "#005236",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "on-secondary-container": "#00311f",
+                        "surface-dim": "#101416",
+                        "outline-variant": "#3c494c",
+                        "on-tertiary": "#67001b",
+                        "on-error": "#690005",
+                        "surface-container": "#1c2022",
+                        "surface-variant": "#313538",
+                        "surface-container-lowest": "#0b0f11",
+                        "background": "#101416",
+                        "on-primary-container": "#005763",
+                        "surface": "#101416",
+                        "on-surface": "#e0e3e6",
+                        "surface-container-low": "#181c1e",
+                        "on-primary-fixed": "#001f25",
+                        "secondary-fixed": "#6ffbbe",
+                        "outline": "#859397",
+                        "surface-container-high": "#272a2d",
+                        "on-secondary": "#003824",
+                        "tertiary-fixed": "#ffdadb",
+                        "primary-fixed-dim": "#2fd9f4",
+                        "primary": "#8aebff",
+                        "on-primary-fixed-variant": "#004e5a",
+                        "surface-container-highest": "#313538",
+                        "inverse-surface": "#e0e3e6",
+                        "inverse-primary": "#006877",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "on-tertiary-container": "#a0002f",
+                        "primary-container": "#22d3ee",
+                        "on-secondary-fixed": "#002113",
+                        "tertiary-container": "#ffaaaf",
+                        "secondary": "#4edea3",
+                        "on-surface-variant": "#bbc9cd",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#40000d",
+                        "secondary-fixed-dim": "#4edea3",
+                        "on-error-container": "#ffdad6",
+                        "error": "#ffb4ab",
+                        "secondary-container": "#00a572",
+                        "on-background": "#e0e3e6",
+                        "surface-bright": "#363a3c",
+                        "on-primary": "#00363e",
+                        "inverse-on-surface": "#2d3133",
+                        "surface-tint": "#2fd9f4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "element-gap": "16px",
+                        "container-padding-mobile": "24px",
+                        "unit": "8px",
+                        "container-padding-desktop": "48px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "display-lg-mobile": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "display-lg-mobile": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "300"}],
+                        "label-md": ["14px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                        "display-lg": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "300"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>body {
+    background-color: #05080A;
+    color: #e0e3e6;
+    font-family: "Hanken Grotesk", sans-serif;
+    overflow-x: hidden
+    }
+.glass-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.15)
+    }
+.grainy-overlay {
+    position: relative
+    }
+.grainy-overlay::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.03;
+    pointer-events: none;
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuA87oxjLBSpD0CvyMHLPXWvNJPK8YXnTDU0rnxuvqRXXw4jqMiBuNLR_Rlek_JgzpFuG9aohW3VOnsaPzlNyzC-KJBmTOrMGuZ6UiE9PO2x_BojPi15sAbGVSqWacnJQCQoQaHS80udPZmPwCSrj4cZ03MGWWQcTe9s4DVgSPvi6T5wzTdH9S0IdjTWsNHQtpsxybsusw_MX7lSFQkLFxn5IGnO881ocGuW_uybppcda4H7GlWsPJGa7y0Sfqv0PV4KJwwfNNVIvzIC)
+    }
+.ambient-glow-cyan {
+    background: radial-gradient(circle at center, rgba(47, 217, 244, 0.15) 0%, transparent 70%)
+    }
+.ambient-glow-emerald {
+    background: radial-gradient(circle at center, rgba(78, 222, 163, 0.12) 0%, transparent 70%)
+    }
+.handwritten {
+    font-family: "Hanken Grotesk", sans-serif;
+    font-style: italic;
+    opacity: 0.8;
+    letter-spacing: 0.02em
+    }
+.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
+    }</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style data-stitch-cursor=""></style><style data-stitch-scroll-lock=""></style></head>
+<body class="dark grainy-overlay">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/10 dark:bg-surface-container-lowest/10 backdrop-blur-3xl border-b border-white/15 shadow-[0_0_20px_rgba(47,217,244,0.15)] flex justify-between items-center px-container-padding-mobile h-16">
+<div class="flex items-center gap-2 active:scale-95 duration-300 transition-all cursor-pointer">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed font-headline-md text-headline-md">blur_on</span>
+<span class="font-headline-md text-headline-md bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">ThermaMind AI</span>
+</div>
+<div class="p-1 hover:backdrop-brightness-125 transition-all cursor-pointer rounded-full">
+<span class="material-symbols-outlined text-on-surface-variant text-headline-md">account_circle</span>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-24 pb-32 px-container-padding-mobile space-y-8 relative overflow-hidden">
+<!-- Ambient Background Glows -->
+<div class="absolute -top-20 -left-20 w-80 h-80 ambient-glow-cyan blur-3xl -z-10"></div>
+<div class="absolute top-1/2 -right-40 w-96 h-96 ambient-glow-emerald blur-3xl -z-10"></div>
+<!-- Header Section -->
+<section class="space-y-1">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface tracking-tight">Warehouse Operations</h1>
+<p class="font-body-md text-body-md text-on-surface-variant flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span> System Status: <span class="text-secondary font-semibold">Stable Operations</span></p>
+</section>
+<!-- Zonal Cards Grid (Asymmetric & Scrollable) -->
+<section class="space-y-6">
+<!-- Card 1: North Wing -->
+<div class="glass-card rounded-[32px] p-6 space-y-4 relative overflow-hidden active:scale-[0.98] transition-transform duration-500">
+<div class="flex justify-between items-start">
+<div class="space-y-1">
+<span class="font-label-md text-label-md uppercase tracking-widest text-primary/80">Active Zone</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">Storage Zone A</h2>
+<div class="flex items-center gap-2 text-secondary font-label-md text-label-md"><span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">ac_unit</span> Cooling Efficiency Stable</div>
+</div>
+<div class="flex flex-col items-end">
+<div class="text-[48px] font-light text-primary leading-none"><span class="material-symbols-outlined text-[20px] align-middle mr-1 text-secondary">trending_down</span>22.4°</div>
+<span class="font-label-md text-label-md text-on-surface-variant">Celsius</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
+<div class="space-y-1">
+<span class="text-on-surface-variant font-label-md text-label-md">Humidity</span>
+<p class="text-on-surface font-body-lg text-body-lg">48%</p>
+</div>
+<div class="space-y-1">
+<span class="text-on-surface-variant font-label-md text-label-md">Cooling Efficiency</span>
+<p class="text-on-surface font-body-lg text-body-lg">98%</p>
+</div>
+<div class="space-y-1">
+<span class="text-on-surface-variant font-label-md text-label-md">Occupancy</span>
+<p class="text-on-surface font-body-lg text-body-lg">12</p>
+</div>
+</div><div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[16px]">electric_bolt</span><span class="text-on-surface-variant font-label-md">14.2 kW</span></div><div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[16px]">co2</span><span class="text-on-surface-variant font-label-md">410 ppm</span></div></div>
+<div class="mt-4 p-3 bg-secondary/10 rounded-2xl flex items-start gap-3 border border-secondary/20">
+<span class="material-symbols-outlined text-secondary text-[20px]">auto_awesome</span>
+<p class="handwritten text-on-secondary-container font-body-md text-[14px]">Humidity rising in Storage Zone A. Airflow increased by 8% to maintain optimal cooling conditions.</p>
+</div>
+</div>
+<!-- Card 2: Creative Lab (Asymmetric Layout Shift) -->
+<div class="glass-card rounded-[32px] p-6 space-y-4 relative overflow-hidden active:scale-[0.98] transition-transform duration-500 bg-gradient-to-br from-white/5 to-white/[0.02]">
+<div class="flex justify-between items-center mb-2">
+<h2 class="font-headline-md text-headline-md text-on-surface">Packaging Section</h2>
+<span class="bg-primary/20 text-primary-fixed px-3 py-1 rounded-full font-label-md text-label-md">Key Win!</span>
+</div>
+<div class="flex items-end justify-between">
+<div class="space-y-4 w-1/2">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center bg-white/5">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant">Cooling Mode</p>
+<p class="font-body-md text-body-md text-on-surface">Optimized</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center bg-white/5">
+<span class="material-symbols-outlined text-primary">air</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant">Airflow Distribution</p>
+<p class="font-body-md text-body-md text-on-surface">Stable</p>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<div class="text-[56px] font-extralight text-on-surface leading-none"><span class="material-symbols-outlined text-[24px] align-middle mr-1 text-primary">trending_flat</span>21.8°</div>
+<div class="flex items-center gap-1 mt-1">
+<div class="h-1 w-12 bg-white/10 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-3/4"></div>
+</div>
+</div>
+</div>
+</div><div class="flex gap-4 pt-4 border-t border-white/5"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-secondary text-[16px]">electric_bolt</span><span class="text-on-surface-variant font-label-md">11.8 kW</span></div><div class="flex items-center gap-2"><span class="material-symbols-outlined text-secondary text-[16px]">co2</span><span class="text-on-surface-variant font-label-md">395 ppm</span></div></div>
+<p class="handwritten text-primary/80 font-body-md text-[14px] mt-4 border-l-2 border-primary/30 pl-3">Cooling adjusted due to increased loading dock activity.</p>
+</div>
+<!-- Card 3: Executive Suite -->
+<div class="glass-card rounded-[32px] p-6 space-y-4 relative overflow-hidden active:scale-[0.98] transition-transform duration-500">
+<div class="flex justify-between items-start">
+<div class="space-y-1">
+<h2 class="font-headline-md text-headline-md text-on-surface">Cold Storage Unit</h2>
+<span class="font-label-md text-label-md text-on-surface-variant">Status: <span class="text-on-surface">Low Activity</span></span>
+</div>
+<div class="flex flex-col items-end">
+<div class="text-[40px] font-light text-on-surface-variant/50 leading-none"><span class="material-symbols-outlined text-[18px] align-middle mr-1 text-on-surface-variant/40">trending_up</span>23.0°</div>
+</div>
+</div>
+<div class="flex gap-2">
+<div class="flex-1 bg-white/5 rounded-2xl p-3 border border-white/5">
+<span class="font-label-md text-label-md text-on-surface-variant block mb-1">Status: <span class="text-on-surface">Low Activity</span></span>
+<span class="font-body-lg text-body-lg">45%</span>
+</div>
+<div class="flex-1 bg-white/5 rounded-2xl p-3 border border-white/5">
+<span class="font-label-md text-label-md text-on-surface-variant block mb-1">Cooling Score</span>
+<span class="font-body-lg text-body-lg">92</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Visualization/Insight Section -->
+<section class="glass-card rounded-[32px] p-6 overflow-hidden">
+<h3 class="font-headline-md text-headline-md mb-4 text-on-surface">Airflow Distribution</h3>
+<div class="h-32 w-full flex items-end gap-1">
+<div class="flex-1 bg-gradient-to-t from-secondary/40 to-transparent rounded-t-lg h-12"></div>
+<div class="flex-1 bg-gradient-to-t from-primary/40 to-transparent rounded-t-lg h-20"></div>
+<div class="flex-1 bg-gradient-to-t from-secondary/60 to-transparent rounded-t-lg h-24"></div>
+<div class="flex-1 bg-gradient-to-t from-primary/30 to-transparent rounded-t-lg h-16"></div>
+<div class="flex-1 bg-gradient-to-t from-secondary/50 to-transparent rounded-t-lg h-28"></div>
+<div class="flex-1 bg-gradient-to-t from-primary/40 to-transparent rounded-t-lg h-18"></div>
+<div class="flex-1 bg-gradient-to-t from-secondary/40 to-transparent rounded-t-lg h-22"></div>
+</div>
+<div class="mt-4 flex justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">08:00</span>
+<span class="font-label-md text-label-md text-secondary">Realtime Monitoring</span>
+<span class="font-label-md text-label-md text-on-surface-variant">20:00</span>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center pt-4 pb-8 px-6 bg-surface/10 dark:bg-surface-container-low/20 backdrop-blur-[50px] rounded-t-[32px] border-t border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.3)]"><a class="flex flex-col items-center justify-center text-secondary drop-shadow-[0_0_8px_rgba(78,222,163,0.5)] active:scale-90 duration-500 ease-out transition-colors hover:text-primary" href="#"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">view_in_ar</span><span class="font-label-md text-label-md">Dashboard</span></a><a class="flex flex-col items-center justify-center text-on-surface-variant/60 active:scale-90 duration-500 ease-out transition-colors hover:text-primary" href="#"><span class="material-symbols-outlined">psychology_alt</span><span class="font-label-md text-label-md">Insights</span></a><a class="flex flex-col items-center justify-center text-on-surface-variant/60 active:scale-90 duration-500 ease-out transition-colors hover:text-primary" href="#"><span class="material-symbols-outlined">bolt</span><span class="font-label-md text-label-md">Energy</span></a><a class="flex flex-col items-center justify-center text-on-surface-variant/60 active:scale-90 duration-500 ease-out transition-colors hover:text-primary" href="#"><span class="material-symbols-outlined">calendar_today</span><span class="font-label-md text-label-md">Schedule</span></a></nav>
+<!-- Floating Action Button (FAB Contextual) -->
+<button class="fixed bottom-32 right-6 w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-secondary text-on-primary flex items-center justify-center shadow-lg active:scale-95 transition-transform z-40">
+<span class="material-symbols-outlined font-bold">add</span>
+</button>
+
+
+</body></html>

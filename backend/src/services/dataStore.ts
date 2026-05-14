@@ -1,4 +1,5 @@
 import { getPrismaClient } from "../config/database";
+import { env, isProduction } from "../config/env";
 import { logger } from "../utils/logger";
 import {
   AIRecommendation,
@@ -221,6 +222,9 @@ export class DataStore {
 
   async initialize() {
     if (!this.prisma) {
+      if (isProduction && !env.ALLOW_MEMORY_DATASTORE) {
+        throw new Error("DATABASE_URL is required to start the production datastore");
+      }
       logger.info("DATABASE_URL not configured; using in-memory demo datastore");
       return;
     }
@@ -231,6 +235,9 @@ export class DataStore {
       await this.seedDatabase();
       logger.info("Connected to PostgreSQL through Prisma");
     } catch (error) {
+      if (isProduction && !env.ALLOW_MEMORY_DATASTORE) {
+        throw error;
+      }
       this.databaseReady = false;
       logger.warn({ error }, "Database unavailable; using in-memory demo datastore");
     }
@@ -369,6 +376,26 @@ export class DataStore {
           )
           .filter((reading): reading is SensorReading => Boolean(reading))
           .map((reading) => ({ ...reading }));
+      },
+    );
+  }
+
+  async getLatestReading(zoneId: number): Promise<SensorReading | null> {
+    return this.run(
+      "getLatestReading",
+      async () => {
+        const reading = await this.prisma.sensorData.findFirst({
+          where: { zoneId },
+          orderBy: { timestamp: "desc" },
+          include: { zone: true },
+        });
+        return reading ? mapSensor(reading) : null;
+      },
+      () => {
+        const reading = [...this.memory.sensorReadings]
+          .reverse()
+          .find((candidate) => candidate.zoneId === zoneId);
+        return reading ? { ...reading } : null;
       },
     );
   }
@@ -649,6 +676,42 @@ export class DataStore {
     await this.run(
       "pruneOlderThan",
       async () => {
+        await this.prisma.$executeRaw`
+          INSERT INTO "SensorHourlyAggregate" (
+            "zoneId",
+            "bucketStart",
+            "avgTemperature",
+            "avgHumidity",
+            "avgCo2",
+            "avgOccupancy",
+            "avgAirflow",
+            "sampleCount",
+            "createdAt",
+            "updatedAt"
+          )
+          SELECT
+            "zoneId",
+            date_trunc('hour', "timestamp") AS "bucketStart",
+            AVG("temperature") AS "avgTemperature",
+            AVG("humidity") AS "avgHumidity",
+            AVG("co2") AS "avgCo2",
+            AVG("occupancy") AS "avgOccupancy",
+            AVG("airflow") AS "avgAirflow",
+            COUNT(*)::int AS "sampleCount",
+            NOW(),
+            NOW()
+          FROM "SensorData"
+          WHERE "timestamp" < ${cutoffs.sensor}
+          GROUP BY "zoneId", date_trunc('hour', "timestamp")
+          ON CONFLICT ("zoneId", "bucketStart") DO UPDATE SET
+            "avgTemperature" = EXCLUDED."avgTemperature",
+            "avgHumidity" = EXCLUDED."avgHumidity",
+            "avgCo2" = EXCLUDED."avgCo2",
+            "avgOccupancy" = EXCLUDED."avgOccupancy",
+            "avgAirflow" = EXCLUDED."avgAirflow",
+            "sampleCount" = EXCLUDED."sampleCount",
+            "updatedAt" = NOW()
+        `;
         await Promise.all([
           this.prisma.sensorData.deleteMany({ where: { timestamp: { lt: cutoffs.sensor } } }),
           this.prisma.energyLog.deleteMany({ where: { timestamp: { lt: cutoffs.energy } } }),

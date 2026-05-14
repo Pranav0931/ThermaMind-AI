@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,11 +6,76 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import AmbientGlow from '../components/AmbientGlow';
 import Slider from '@react-native-community/slider';
+import {
+  Schedule,
+  SimulationResult,
+  deleteApi,
+  getApi,
+  postApi,
+} from '../services/thermamindApi';
 
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const [temperature, setTemperature] = useState(22);
   const [humidity, setHumidity] = useState(45);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [simulation, setSimulation] = useState<SimulationResult | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadSchedules() {
+      try {
+        const data = await getApi<Schedule[]>('/api/schedules');
+        if (mounted) {
+          setSchedules(data);
+          if (data[0]) {
+            setTemperature(data[0].targetTemp);
+            setHumidity(data[0].targetHum);
+          }
+        }
+      } catch {
+        if (mounted) {
+          setSchedules([]);
+        }
+      }
+    }
+
+    void loadSchedules();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function saveProfile() {
+    const created = await postApi<Schedule>('/api/schedules', {
+      zoneId: 1,
+      name: 'Global Target Profile',
+      startTime: '06:00',
+      duration: 8,
+      targetTemp: Number(temperature.toFixed(1)),
+      targetHum: Math.round(humidity),
+      mode: 'full_load',
+      isActive: true,
+    });
+    setSchedules(current => [created, ...current.filter(item => item.id !== created.id)]);
+  }
+
+  async function removeSchedule(id: number) {
+    await deleteApi(`/api/schedules/${id}`);
+    setSchedules(current => current.filter(item => item.id !== id));
+  }
+
+  async function runSimulation() {
+    const result = await postApi<SimulationResult>('/api/ai/simulate', {
+      zoneId: 1,
+      targetTemp: Number(temperature.toFixed(1)),
+      targetHum: Math.round(humidity),
+      horizonHours: 24,
+    });
+    setSimulation(result);
+  }
 
   return (
     <View style={styles.container}>
@@ -41,7 +106,7 @@ export default function ScheduleScreen() {
               <Text style={styles.cardTitle}>Global Target Profile</Text>
               <Text style={styles.cardSubtitle}>Baseline Climate Settings</Text>
             </View>
-            <TouchableOpacity style={styles.saveBtn}>
+            <TouchableOpacity style={styles.saveBtn} onPress={saveProfile}>
               <Text style={styles.saveBtnText}>Save</Text>
             </TouchableOpacity>
           </View>
@@ -89,73 +154,44 @@ export default function ScheduleScreen() {
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Daily Schedule</Text>
 
-          {/* Timeline Event 1 */}
-          <View style={styles.timelineEvent}>
-            <View style={styles.timelineLeft}>
-              <Text style={styles.timeText}>06:00</Text>
-              <Text style={styles.durationText}>8 hrs</Text>
-            </View>
-            <View style={styles.timelineCenter}>
-              <View style={[styles.timelineNode, { borderColor: '#8aebff', backgroundColor: 'rgba(138, 235, 255, 0.2)' }]} />
-              <View style={[styles.timelineLine, { backgroundColor: '#8aebff' }]} />
-            </View>
-            <View style={[styles.timelineCard, styles.glowCard, { borderColor: 'rgba(138, 235, 255, 0.3)' }]}>
-              <View style={styles.timelineCardHeader}>
-                <View>
-                  <Text style={styles.timelineCardTitle}>Active Operational Shift</Text>
-                  <Text style={styles.timelineCardSubtitle}>AI Auto-Balancing</Text>
+          {schedules.map((schedule, index) => {
+            const active = schedule.isActive && index === 0;
+            return (
+              <View key={schedule.id} style={styles.timelineEvent}>
+                <View style={styles.timelineLeft}>
+                  <Text style={styles.timeText}>{schedule.startTime}</Text>
+                  <Text style={styles.durationText}>{schedule.duration} hrs</Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: 'rgba(138, 235, 255, 0.1)' }]}>
-                  <Text style={[styles.statusBadgeText, { color: '#8aebff' }]}>ACTIVE</Text>
+                <View style={styles.timelineCenter}>
+                  <View style={[styles.timelineNode, { borderColor: active ? '#8aebff' : '#bbc9cd', backgroundColor: active ? 'rgba(138, 235, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)' }]} />
+                  <View style={[styles.timelineLine, { backgroundColor: active ? '#8aebff' : 'rgba(255, 255, 255, 0.1)' }]} />
                 </View>
-              </View>
-              <View style={styles.timelineCardBody}>
-                <View style={styles.infoCol}>
-                  <Text style={styles.infoLabel}>Zone 1-4</Text>
-                  <Text style={styles.infoValue}>Full Load</Text>
-                </View>
-                <View style={styles.infoCol}>
-                  <Text style={styles.infoLabel}>Est. Energy</Text>
-                  <Text style={styles.infoValue}>12.4 kW</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Timeline Event 2 */}
-          <View style={styles.timelineEvent}>
-            <View style={styles.timelineLeft}>
-              <Text style={styles.timeText}>14:00</Text>
-              <Text style={styles.durationText}>10 hrs</Text>
-            </View>
-            <View style={styles.timelineCenter}>
-              <View style={[styles.timelineNode, { borderColor: '#bbc9cd', backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
-              <View style={[styles.timelineLine, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
-            </View>
-            <View style={[styles.timelineCard, { borderColor: 'rgba(255, 255, 255, 0.1)' }]}>
-              <View style={styles.timelineCardHeader}>
-                <View>
-                  <Text style={styles.timelineCardTitle}>Standby Mode</Text>
-                  <Text style={styles.timelineCardSubtitle}>Energy Conservation</Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
-                  <Text style={[styles.statusBadgeText, { color: '#bbc9cd' }]}>UPCOMING</Text>
+                <View style={[styles.timelineCard, active ? styles.glowCard : undefined, { borderColor: active ? 'rgba(138, 235, 255, 0.3)' : 'rgba(255, 255, 255, 0.1)' }]}>
+                  <View style={styles.timelineCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.timelineCardTitle}>{schedule.name}</Text>
+                      <Text style={styles.timelineCardSubtitle}>{schedule.zoneName}</Text>
+                    </View>
+                    <TouchableOpacity style={[styles.statusBadge, { backgroundColor: active ? 'rgba(138, 235, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)' }]} onPress={() => removeSchedule(schedule.id)}>
+                      <Text style={[styles.statusBadgeText, { color: active ? '#8aebff' : '#bbc9cd' }]}>{active ? 'ACTIVE' : 'REMOVE'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.timelineCardBody}>
+                    <View style={styles.infoCol}>
+                      <Text style={styles.infoLabel}>Mode</Text>
+                      <Text style={styles.infoValue}>{schedule.mode.replace('_', ' ')}</Text>
+                    </View>
+                    <View style={styles.infoCol}>
+                      <Text style={styles.infoLabel}>Target</Text>
+                      <Text style={styles.infoValue}>{schedule.targetTemp.toFixed(1)}°C / {Math.round(schedule.targetHum)}%</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
-              <View style={styles.timelineCardBody}>
-                <View style={styles.infoCol}>
-                  <Text style={styles.infoLabel}>Zone 1-4</Text>
-                  <Text style={styles.infoValue}>Reduced</Text>
-                </View>
-                <View style={styles.infoCol}>
-                  <Text style={styles.infoLabel}>Est. Energy</Text>
-                  <Text style={styles.infoValue}>4.2 kW</Text>
-                </View>
-              </View>
-            </View>
-          </View>
+            );
+          })}
           
-          <TouchableOpacity style={styles.addEventBtn}>
+          <TouchableOpacity style={styles.addEventBtn} onPress={saveProfile}>
             <MaterialIcons name="add" size={24} color="#8aebff" />
             <Text style={styles.addEventText}>Add New Schedule Profile</Text>
           </TouchableOpacity>
@@ -168,11 +204,11 @@ export default function ScheduleScreen() {
           </View>
           <View style={styles.simInfo}>
             <Text style={styles.simTitle}>Forecast Simulation</Text>
-            <Text style={styles.simSubtitle}>Test your settings against tomorrow's predicted warehouse activity and weather patterns.</Text>
+            <Text style={styles.simSubtitle}>{simulation?.recommendation ?? "Test your settings against tomorrow's predicted warehouse activity and weather patterns."}</Text>
           </View>
-          <TouchableOpacity style={styles.simBtn}>
+          <TouchableOpacity style={styles.simBtn} onPress={runSimulation}>
             <LinearGradient colors={['#4edea3', '#00a572']} style={styles.simBtnGradient}>
-              <Text style={styles.simBtnText}>Run Simulation</Text>
+              <Text style={styles.simBtnText}>{simulation ? `${simulation.projectedSavingsPercent}% Savings` : 'Run Simulation'}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </LinearGradient>

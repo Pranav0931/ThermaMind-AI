@@ -1,16 +1,36 @@
 import { NextFunction, Request, Response } from "express";
 import { ZodSchema } from "zod";
+import { AppError } from "../utils/http";
 
 export function validateBody<T>(schema: ZodSchema<T>) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: parsed.error.issues,
-      });
+      return next(new AppError(400, "VALIDATION_FAILED", "Request body validation failed", parsed.error.issues));
     }
     req.body = parsed.data;
+    return next();
+  };
+}
+
+export function validateParams<T>(schema: ZodSchema<T>) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const parsed = schema.safeParse(req.params);
+    if (!parsed.success) {
+      return next(new AppError(400, "VALIDATION_FAILED", "Request params validation failed", parsed.error.issues));
+    }
+    req.params = parsed.data as Request["params"];
+    return next();
+  };
+}
+
+export function validateQuery<T>(schema: ZodSchema<T>) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      return next(new AppError(400, "VALIDATION_FAILED", "Request query validation failed", parsed.error.issues));
+    }
+    req.query = parsed.data as Request["query"];
     return next();
   };
 }

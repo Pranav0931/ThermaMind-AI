@@ -1,13 +1,107 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import {
+  EnergyLog,
+  EnergyStats,
+  createRealtimeSocket,
+  fallbackEnergyStats,
+  getApi,
+} from '../services/thermamindApi';
+
+const fanModes = [
+  { label: 'LOW', value: 'low' },
+  { label: 'BALANCED', value: 'balanced' },
+  { label: 'INDUSTRIAL', value: 'industrial' },
+  { label: 'PEAK LOAD', value: 'peak' },
+] as const;
+
+function chartPath(values: number[], height: number) {
+  if (values.length === 0) {
+    return 'M 0 120 Q 100 110, 200 120 T 400 115';
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const spread = Math.max(1, max - min);
+  return values
+    .map((value, index) => {
+      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 400;
+      const y = height - 20 - ((value - min) / spread) * (height - 45);
+      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(' ');
+}
 
 export default function EnergyScreen() {
   const insets = useSafeAreaInsets();
+  const [stats, setStats] = useState<EnergyStats>(fallbackEnergyStats);
+  const [history, setHistory] = useState<EnergyLog[]>([]);
+  const [activeFanMode, setActiveFanMode] = useState<(typeof fanModes)[number]['value']>('balanced');
+
+  const optimizedPath = useMemo(() => chartPath(history.map(item => item.optimizedLoad), 150), [history]);
+  const standardPath = useMemo(() => chartPath(history.map(item => item.hvacLoad), 150), [history]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadEnergyData() {
+      try {
+        const [nextStats, nextHistory] = await Promise.all([
+          getApi<EnergyStats>('/api/energy/stats'),
+          getApi<EnergyLog[]>('/api/energy/history?limit=24'),
+        ]);
+        if (mounted) {
+          setStats(nextStats);
+          setHistory(nextHistory);
+        }
+      } catch {
+        if (mounted) {
+          setStats(fallbackEnergyStats);
+        }
+      }
+    }
+
+    void loadEnergyData();
+
+    const socket = createRealtimeSocket();
+    socket.on('energy_update', (payload: EnergyStats | EnergyLog) => {
+      if ('optimizedLoad' in payload) {
+        setHistory(current => [...current.slice(-23), payload]);
+      } else {
+        setStats(current => ({ ...current, ...payload }));
+      }
+    });
+    socket.on('system_status', (payload: Partial<EnergyStats> & { load?: number }) => {
+      setStats(current => ({
+        ...current,
+        currentLoad: payload.load ?? payload.currentLoad ?? current.currentLoad,
+        efficiency: payload.efficiency ?? current.efficiency,
+        coolingScore: payload.coolingScore ?? current.coolingScore,
+        carbonSaved: payload.carbonSaved ?? current.carbonSaved,
+        fanSpeed: payload.fanSpeed ?? current.fanSpeed,
+        compressorEff: payload.compressorEff ?? current.compressorEff,
+      }));
+    });
+
+    return () => {
+      mounted = false;
+      socket.disconnect();
+    };
+  }, []);
+
+  function setFanSpeed(mode: (typeof fanModes)[number]['value']) {
+    setActiveFanMode(mode);
+    const socket = createRealtimeSocket();
+    const timeout = setTimeout(() => socket.disconnect(), 1500);
+    socket.emit('set_fan_speed', { zoneId: 1, speed: mode }, () => {
+      clearTimeout(timeout);
+      socket.disconnect();
+    });
+  }
 
   return (
     <View style={styles.container}>
@@ -32,7 +126,7 @@ export default function EnergyScreen() {
               <Text style={styles.heroTitle}>HVAC Energy Optimization</Text>
             </View>
             <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>32% Energy Savings</Text>
+              <Text style={styles.heroBadgeText}>{stats.averageSavingsPercent.toFixed(1)}% Energy Savings</Text>
             </View>
           </View>
 
@@ -45,8 +139,8 @@ export default function EnergyScreen() {
                   <Stop offset="100%" stopColor="#4edea3" stopOpacity="1" />
                 </SvgLinearGradient>
               </Defs>
-              <Path d="M 0 40 Q 50 45, 100 80 T 200 70 T 300 90 T 400 45" fill="none" opacity="0.5" stroke="#bbc9cd" strokeDasharray="4 4" strokeWidth="2" />
-              <Path d="M 0 130 Q 50 120, 100 110 T 200 125 T 300 115 T 400 120" fill="none" stroke="url(#gradient)" strokeLinecap="round" strokeWidth="4" />
+              <Path d={standardPath} fill="none" opacity="0.5" stroke="#bbc9cd" strokeDasharray="4 4" strokeWidth="2" />
+              <Path d={optimizedPath} fill="none" stroke="url(#gradient)" strokeLinecap="round" strokeWidth="4" />
             </Svg>
             <View style={styles.chartOverlayTop}>
               <Text style={styles.chartOverlayText}>Standard HVAC Usage</Text>
@@ -59,11 +153,11 @@ export default function EnergyScreen() {
           <View style={styles.heroFooter}>
             <View>
               <Text style={styles.heroFooterLabel}>Current HVAC Load</Text>
-              <Text style={styles.heroFooterValue}>3.8 kW</Text>
+              <Text style={styles.heroFooterValue}>{stats.currentLoad.toFixed(1)} kW</Text>
             </View>
             <View>
               <Text style={styles.heroFooterLabel}>Optimization Status</Text>
-              <Text style={[styles.heroFooterValue, { color: '#8aebff' }]}>Active</Text>
+              <Text style={[styles.heroFooterValue, { color: '#8aebff' }]}>{stats.optimizationStatus}</Text>
             </View>
           </View>
         </View>
@@ -77,8 +171,8 @@ export default function EnergyScreen() {
               <Text style={styles.kpiTitle}>Carbon Reduction</Text>
             </View>
             <View style={styles.kpiValueRow}>
-              <Text style={styles.kpiValueLarge}>2.4</Text>
-              <Text style={styles.kpiValueUnit}>Tons CO2 Saved</Text>
+              <Text style={styles.kpiValueLarge}>{stats.carbonSaved.toFixed(1)}</Text>
+              <Text style={styles.kpiValueUnit}>kg CO2 Saved</Text>
             </View>
             <Text style={styles.kpiFooterText}>YTD SAVED</Text>
           </View>
@@ -90,7 +184,7 @@ export default function EnergyScreen() {
               <Text style={styles.kpiTitle}>Cooling Efficiency</Text>
             </View>
             <View style={styles.kpiValueRow}>
-              <Text style={styles.kpiValueLarge}>98.2</Text>
+              <Text style={styles.kpiValueLarge}>{stats.coolingScore.toFixed(1)}</Text>
               <Text style={styles.kpiValueUnit}>Score</Text>
             </View>
             <Text style={[styles.kpiFooterText, { color: '#8aebff' }]}>ENERGY OPTIMIZATION SCORE</Text>
@@ -129,22 +223,18 @@ export default function EnergyScreen() {
                   <Text style={styles.statusItemSubtitle}>Airflow Distribution</Text>
                 </View>
               </View>
-              <Text style={[styles.statusItemValueLarge, { color: '#8aebff' }]}>65%</Text>
+              <Text style={[styles.statusItemValueLarge, { color: '#8aebff' }]}>{Math.round(stats.fanSpeed)}%</Text>
             </View>
 
             <View style={styles.fanBtnsRow}>
-              <TouchableOpacity style={styles.fanBtn}>
-                <Text style={styles.fanBtnText}>LOW</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.fanBtn, styles.fanBtnActive]}>
-                <Text style={styles.fanBtnActiveText}>BALANCED</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.fanBtn}>
-                <Text style={styles.fanBtnText}>INDUSTRIAL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.fanBtn}>
-                <Text style={styles.fanBtnText}>PEAK LOAD</Text>
-              </TouchableOpacity>
+              {fanModes.map(mode => {
+                const isActive = activeFanMode === mode.value;
+                return (
+                  <TouchableOpacity key={mode.value} style={[styles.fanBtn, isActive && styles.fanBtnActive]} onPress={() => setFanSpeed(mode.value)}>
+                    <Text style={isActive ? styles.fanBtnActiveText : styles.fanBtnText}>{mode.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -171,7 +261,7 @@ export default function EnergyScreen() {
                 <Text style={styles.statusItemSubtitle}>Active Load Cycle</Text>
               </View>
             </View>
-            <Text style={[styles.statusItemValue, { color: '#4edea3' }]}>94%</Text>
+            <Text style={[styles.statusItemValue, { color: '#4edea3' }]}>{Math.round(stats.compressorEff)}%</Text>
           </View>
 
           <View style={styles.statusItem}>

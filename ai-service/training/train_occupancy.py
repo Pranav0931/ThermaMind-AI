@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from data.synthetic_generator import generate_sensor_rows
+from models.occupancy_forecaster import ARTIFACT, train_and_save
 
 
 if __name__ == "__main__":
-    rows = generate_sensor_rows()
-    print(f"Generated {len(rows)} synthetic occupancy rows. Replace this stub with LSTM training.")
+    train_and_save(force=True)
+    print(f"Saved occupancy LSTM model to {ARTIFACT}")

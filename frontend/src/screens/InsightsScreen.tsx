@@ -1,13 +1,73 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import AmbientGlow from '../components/AmbientGlow';
+import {
+  Recommendation,
+  SensorReading,
+  fallbackReadings,
+  getApi,
+  postApi,
+} from '../services/thermamindApi';
+
+interface OccupancyPrediction {
+  predictions: number[];
+  confidence: number;
+}
 
 export default function InsightsScreen() {
   const insets = useSafeAreaInsets();
+  const [readings, setReadings] = useState<SensorReading[]>(fallbackReadings);
+  const [prediction, setPrediction] = useState<OccupancyPrediction>({ predictions: [12, 18, 24, 20], confidence: 0.94 });
+  const [recommendation, setRecommendation] = useState<Recommendation>({
+    type: 'airflow_redirect',
+    message: 'Demand is stable. Maintain balanced airflow and trim compressor load for energy savings.',
+    confidence: 0.94,
+    savings: 12.5,
+    co2Trend: 'stable',
+  });
+
+  const primary = readings[0] ?? fallbackReadings[0];
+  const maxPrediction = Math.max(...prediction.predictions, 1);
+  const stabilityScore = useMemo(() => {
+    const tempScore = Math.max(0, 100 - Math.abs(primary.temperature - 22) * 7);
+    const humidityScore = Math.max(0, 100 - Math.abs(primary.humidity - 45) * 1.4);
+    const co2Score = Math.max(0, 100 - Math.max(0, primary.co2 - 450) * 0.08);
+    return Math.round((tempScore + humidityScore + co2Score) / 3);
+  }, [primary]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadInsights() {
+      try {
+        const [latestReadings, occupancy, nextRecommendation] = await Promise.all([
+          getApi<SensorReading[]>('/api/sensors'),
+          postApi<OccupancyPrediction>('/api/ai/predict', { zoneId: 1, horizonMinutes: 120 }),
+          postApi<Recommendation>('/api/ai/recommend', { zoneId: 1 }),
+        ]);
+
+        if (mounted) {
+          setReadings(latestReadings.length ? latestReadings : fallbackReadings);
+          setPrediction(occupancy);
+          setRecommendation(nextRecommendation);
+        }
+      } catch {
+        if (mounted) {
+          setReadings(fallbackReadings);
+        }
+      }
+    }
+
+    void loadInsights();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -34,13 +94,13 @@ export default function InsightsScreen() {
               <Text style={styles.cardTitle}>Climate Stability Score</Text>
               <Text style={styles.cardSubtitle}>Realtime HVAC Performance</Text>
             </View>
-            <Text style={styles.largeScore}>98%</Text>
+            <Text style={styles.largeScore}>{stabilityScore}%</Text>
           </View>
           
           <View style={styles.progressBg}>
             <LinearGradient 
               colors={['#8aebff', '#4edea3']} 
-              style={[styles.progressFill, { width: '98%' }]} 
+              style={[styles.progressFill, { width: `${stabilityScore}%` }]}
               start={{x: 0, y: 0}} 
               end={{x: 1, y: 0}} 
             />
@@ -49,11 +109,11 @@ export default function InsightsScreen() {
           <View style={styles.splitRow}>
             <View style={styles.splitBox}>
               <Text style={styles.splitBoxLabel}>Humidity Level</Text>
-              <Text style={styles.splitBoxValue}>42%</Text>
+              <Text style={styles.splitBoxValue}>{Math.round(primary.humidity)}%</Text>
             </View>
             <View style={styles.splitBox}>
               <Text style={styles.splitBoxLabel}>Air Quality Status</Text>
-              <Text style={[styles.splitBoxValue, { color: '#4edea3' }]}>Optimal</Text>
+              <Text style={[styles.splitBoxValue, { color: primary.co2 > 800 ? '#ffb4ab' : '#4edea3' }]}>{primary.co2 > 800 ? 'Elevated' : 'Optimal'}</Text>
             </View>
           </View>
         </View>
@@ -72,14 +132,18 @@ export default function InsightsScreen() {
 
           {/* Bar Graph */}
           <View style={styles.graphContainer}>
-            <View style={[styles.graphBar, { height: '30%', backgroundColor: 'rgba(138, 235, 255, 0.2)' }]} />
-            <View style={[styles.graphBar, { height: '45%', backgroundColor: 'rgba(138, 235, 255, 0.3)' }]} />
-            <View style={[styles.graphBar, { height: '60%', backgroundColor: 'rgba(138, 235, 255, 0.4)' }]} />
-            <View style={[styles.graphBar, { height: '85%', backgroundColor: 'rgba(138, 235, 255, 0.6)' }]} />
-            <View style={[styles.graphBar, { height: '70%', backgroundColor: 'rgba(138, 235, 255, 0.8)' }]} />
-            <View style={[styles.graphBar, { height: '95%', backgroundColor: 'rgba(78, 222, 163, 0.8)' }]} />
-            <View style={[styles.graphBar, { height: '50%', backgroundColor: 'rgba(138, 235, 255, 0.6)' }]} />
-            <View style={[styles.graphBar, { height: '40%', backgroundColor: 'rgba(138, 235, 255, 0.4)' }]} />
+            {prediction.predictions.map((value, index) => (
+              <View
+                key={`${value}-${index}`}
+                style={[
+                  styles.graphBar,
+                  {
+                    height: `${Math.max(16, Math.round((value / maxPrediction) * 95))}%`,
+                    backgroundColor: index === prediction.predictions.length - 1 ? 'rgba(78, 222, 163, 0.8)' : 'rgba(138, 235, 255, 0.55)',
+                  },
+                ]}
+              />
+            ))}
             <Text style={styles.graphOverlayText}>PREDICTED OCCUPANCY</Text>
           </View>
 
@@ -109,21 +173,21 @@ export default function InsightsScreen() {
             <View style={styles.aiInfo}>
               <Text style={styles.cardTitle}>AI Recommendation</Text>
               <Text style={styles.aiDescription}>
-                Occupancy predicted to increase in West Storage Zone within 20 minutes. Airflow redirected by 15% to maintain cooling efficiency while reducing energy spikes.
+                {recommendation.message}
               </Text>
               
               <View style={styles.aiMetricsRow}>
                 <View>
                   <Text style={styles.aiMetricLabel}>CONFIDENCE</Text>
-                  <Text style={[styles.aiMetricValue, { color: '#8aebff' }]}>94%</Text>
+                  <Text style={[styles.aiMetricValue, { color: '#8aebff' }]}>{Math.round(recommendation.confidence * 100)}%</Text>
                 </View>
                 <View>
                   <Text style={styles.aiMetricLabel}>SAVINGS</Text>
-                  <Text style={[styles.aiMetricValue, { color: '#4edea3' }]}>12.5%</Text>
+                  <Text style={[styles.aiMetricValue, { color: '#4edea3' }]}>{recommendation.savings.toFixed(1)}%</Text>
                 </View>
                 <View>
                   <Text style={styles.aiMetricLabel}>CO2 TREND</Text>
-                  <Text style={styles.aiMetricValue}>Stable</Text>
+                  <Text style={styles.aiMetricValue}>{recommendation.co2Trend}</Text>
                 </View>
               </View>
             </View>

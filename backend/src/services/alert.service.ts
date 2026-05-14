@@ -30,6 +30,11 @@ class AlertService {
           alerts.push(alert);
         }
       }
+
+      const occupancyAlert = await this.evaluateOccupancyForecast(reading, zone);
+      if (occupancyAlert) {
+        alerts.push(occupancyAlert);
+      }
     }
 
     return alerts;
@@ -89,6 +94,23 @@ class AlertService {
     }
 
     return null;
+  }
+
+  private async evaluateOccupancyForecast(reading: SensorReading, zone: Zone): Promise<Alert | null> {
+    const forecast = await aiService.predictOccupancy(reading.zoneId, 60);
+    const peak = Math.max(...forecast.predictions);
+    const surgeThreshold = Math.max(reading.occupancy + Math.ceil(zone.capacity * 0.2), Math.ceil(zone.capacity * 0.85));
+
+    if (peak < surgeThreshold) {
+      return null;
+    }
+
+    return this.createOnce(
+      reading.zoneId,
+      "occupancy_forecast_surge",
+      "info",
+      `${reading.zoneName} occupancy is forecast to reach ${peak}/${zone.capacity} within the next hour. Pre-cooling can reduce peak demand.`,
+    );
   }
 
   private async createOnce(zoneId: number, type: string, severity: AlertSeverity, message: string) {

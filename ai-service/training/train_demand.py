@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 from pathlib import Path
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from data.synthetic_generator import generate_sensor_rows
+from data.preprocessor import model_path
+from models.demand_predictor import ARTIFACT, train_and_save
 
 
 if __name__ == "__main__":
-    rows = generate_sensor_rows()
-    print(f"Generated {len(rows)} synthetic demand rows. Replace this stub with XGBoost training.")
+    train_and_save(force=True)
+    print(f"Saved demand XGBoost model to {model_path(ARTIFACT)}")

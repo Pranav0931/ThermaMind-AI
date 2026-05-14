@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import { disconnectPrisma } from "./config/database";
 import { startRetentionJob } from "./jobs/retention";
 import { errorHandler, notFound } from "./middleware/errorHandler";
+import { requestLogger } from "./middleware/requestLogger";
 import { apiRoutes } from "./routes";
 import { dataStore } from "./services/dataStore";
 import { energyService } from "./services/energy.service";
@@ -27,6 +28,7 @@ const io = new Server(server, {
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
+app.use(requestLogger);
 
 app.get("/health", (_req, res) => {
   res.json({

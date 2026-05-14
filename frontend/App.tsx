@@ -1,6 +1,6 @@
 import "./global.css";
 import React from 'react';
-import { NavigationContainer, Theme } from '@react-navigation/native';
+import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,8 +17,9 @@ import CustomBottomNav from './src/navigation/CustomBottomNav';
 const Tab = createBottomTabNavigator();
 
 const customTheme: Theme = {
-  dark: true,
+  ...DarkTheme,
   colors: {
+    ...DarkTheme.colors,
     primary: '#8aebff',
     background: '#05080A',
     card: '#101416',

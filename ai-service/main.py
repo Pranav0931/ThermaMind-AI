@@ -39,6 +39,13 @@ def health() -> dict:
     return {"ok": True, "service": "thermamind-ai-service"}
 
 
+@app.post("/predict")
+def predict(request: OccupancyRequest) -> dict:
+    occupancy = predict_occupancy(request.zone_id, request.horizon_minutes)
+    demand = predict_demand(request.zone_id, {})
+    return {"occupancy": occupancy, "demand": demand}
+
+
 @app.post("/predict/occupancy")
 def occupancy(request: OccupancyRequest) -> dict:
     return predict_occupancy(request.zone_id, request.horizon_minutes)

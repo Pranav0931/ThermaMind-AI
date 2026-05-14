@@ -1,5 +1,6 @@
 import { Server, Socket } from "socket.io";
 import { z } from "zod";
+import { env } from "../config/env";
 import { alertService } from "../services/alert.service";
 import { aiService } from "../services/ai.service";
 import { dataStore } from "../services/dataStore";
@@ -29,6 +30,7 @@ const recommendationPayloadSchema = z.object({
 
 let sensorInterval: NodeJS.Timeout | undefined;
 let statusInterval: NodeJS.Timeout | undefined;
+let energyInterval: NodeJS.Timeout | undefined;
 let recommendationInterval: NodeJS.Timeout | undefined;
 
 type Ack = ((response: unknown) => void) | undefined;
@@ -42,13 +44,14 @@ export function setupRealtime(io: Server) {
 }
 
 export function stopRealtimeLoops() {
-  for (const interval of [sensorInterval, statusInterval, recommendationInterval]) {
+  for (const interval of [sensorInterval, statusInterval, energyInterval, recommendationInterval]) {
     if (interval) {
       clearInterval(interval);
     }
   }
   sensorInterval = undefined;
   statusInterval = undefined;
+  energyInterval = undefined;
   recommendationInterval = undefined;
 }
 
@@ -56,19 +59,25 @@ function startRealtimeLoops(io: Server) {
   if (!sensorInterval) {
     sensorInterval = setInterval(() => {
       void publishSensorTick(io);
-    }, 2000);
+    }, env.SENSOR_TICK_MS);
   }
 
   if (!statusInterval) {
     statusInterval = setInterval(() => {
+      void publishSystemStatus(io);
+    }, env.STATUS_TICK_MS);
+  }
+
+  if (!energyInterval) {
+    energyInterval = setInterval(() => {
       void publishEnergyTick(io);
-    }, 5000);
+    }, env.ENERGY_TICK_MS);
   }
 
   if (!recommendationInterval) {
     recommendationInterval = setInterval(() => {
       void publishRecommendation(io);
-    }, 5 * 60 * 1000);
+    }, env.RECOMMENDATION_TICK_MS);
   }
 }
 
@@ -135,6 +144,14 @@ async function publishEnergyTick(io: Server) {
     io.emit("energy_update", energyLog);
   } catch (error) {
     logger.error({ error }, "Failed to publish energy tick");
+  }
+}
+
+async function publishSystemStatus(io: Server) {
+  try {
+    io.emit("system_status", await dataStore.getLatestSystemStatus());
+  } catch (error) {
+    logger.error({ error }, "Failed to publish system status");
   }
 }
 

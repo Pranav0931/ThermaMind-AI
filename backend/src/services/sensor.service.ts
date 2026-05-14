@@ -19,6 +19,16 @@ class SensorService {
     return sensorSimulator.tick();
   }
 
+  async getLatestReading(zoneId: number) {
+    const reading = await dataStore.getLatestReading(zoneId);
+    if (reading) {
+      return reading;
+    }
+
+    const readings = await sensorSimulator.tick();
+    return readings.find((candidate) => candidate.zoneId === zoneId) ?? null;
+  }
+
   async getHistory(zoneId: number, options: { from?: Date; to?: Date; limit?: number }) {
     return dataStore.getSensorHistory(zoneId, options.from, options.to, options.limit ?? 250);
   }

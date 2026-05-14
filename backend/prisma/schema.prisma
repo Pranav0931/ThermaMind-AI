@@ -20,6 +20,24 @@ model SensorData {
   @@index([zoneId, timestamp])
 }
 
+model SensorHourlyAggregate {
+  id             Int      @id @default(autoincrement())
+  zoneId         Int
+  zone           Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  bucketStart    DateTime
+  avgTemperature Float
+  avgHumidity    Float
+  avgCo2         Float
+  avgOccupancy   Float
+  avgAirflow     Float
+  sampleCount    Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([zoneId, bucketStart])
+  @@index([bucketStart])
+}
+
 model SystemStatus {
   id             Int      @id @default(autoincrement())
   efficiency     Float
@@ -48,6 +66,7 @@ model Zone {
   targetHum   Float        @default(45)
   fanSpeed    Float        @default(65)
   sensorData  SensorData[]
+  hourlyData  SensorHourlyAggregate[]
   alerts      Alert[]
   schedules   Schedule[]
 }

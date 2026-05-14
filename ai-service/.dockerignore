@@ -1,5 +1,3 @@
 __pycache__
 .pytest_cache
 .env
-saved_models/*.pkl
-saved_models/*.pt

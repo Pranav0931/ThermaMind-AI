@@ -1,42 +1,108 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Platform } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import AmbientGlow from '../components/AmbientGlow';
-import { io } from 'socket.io-client';
+import {
+  Alert,
+  EnergyStats,
+  SensorReading,
+  createRealtimeSocket,
+  fallbackEnergyStats,
+  fallbackReadings,
+  getApi,
+} from '../services/thermamindApi';
 
 const { width } = Dimensions.get('window');
-const SERVER_URL = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [pulse, setPulse] = useState(true);
-  const [sensorData, setSensorData] = useState({
-    temperature: 22.4,
-    humidity: 48,
-    co2: 410,
-    occupancy: 12,
-    efficiency: 98,
-    load: 14.2
-  });
+  const [readings, setReadings] = useState<SensorReading[]>(fallbackReadings);
+  const [energyStats, setEnergyStats] = useState<EnergyStats>(fallbackEnergyStats);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [airflowHistory, setAirflowHistory] = useState<number[]>([48, 80, 96, 64, 112, 72, 88]);
+
+  const activeAlert = alerts[0];
+  const zones = readings.length > 0 ? readings : fallbackReadings;
+  const primary = zones[0] ?? fallbackReadings[0];
+  const secondary = zones[1] ?? fallbackReadings[1];
+  const tertiary = zones[2] ?? fallbackReadings[2];
+  const systemStable = energyStats.efficiency >= 90 && !alerts.some(alert => alert.severity === 'critical');
+  const airflowBars = useMemo(() => airflowHistory.slice(-7), [airflowHistory]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setPulse(p => !p);
     }, 1000);
 
-    const socket = io(SERVER_URL);
-    socket.on('sensor_data', (data) => {
-      setSensorData(data);
+    let mounted = true;
+
+    async function loadInitialData() {
+      try {
+        const [latestReadings, activeAlerts, stats, history] = await Promise.all([
+          getApi<SensorReading[]>('/api/sensors'),
+          getApi<Alert[]>('/api/alerts'),
+          getApi<EnergyStats>('/api/energy/stats'),
+          getApi<SensorReading[]>(`/api/sensors/${primary.zoneId}/history?limit=7`),
+        ]);
+
+        if (!mounted) {
+          return;
+        }
+
+        setReadings(latestReadings.length ? latestReadings : fallbackReadings);
+        setAlerts(activeAlerts);
+        setEnergyStats(stats);
+        setAirflowHistory(history.map(item => Math.max(24, Math.min(120, item.airflow * 1.25))));
+      } catch {
+        if (mounted) {
+          setReadings(fallbackReadings);
+          setEnergyStats(fallbackEnergyStats);
+        }
+      }
+    }
+
+    void loadInitialData();
+
+    const socket = createRealtimeSocket();
+    socket.on('sensor_update', (payload: { data?: SensorReading[] }) => {
+      if (payload.data?.length) {
+        setReadings(payload.data);
+        setAirflowHistory(history => [...history.slice(-6), Math.max(24, Math.min(120, payload.data![0].airflow * 1.25))]);
+      }
+    });
+    socket.on('system_status', (status: Partial<EnergyStats> & { load?: number }) => {
+      setEnergyStats(current => ({
+        ...current,
+        efficiency: status.efficiency ?? current.efficiency,
+        currentLoad: status.load ?? current.currentLoad,
+        coolingScore: status.coolingScore ?? current.coolingScore,
+        carbonSaved: status.carbonSaved ?? current.carbonSaved,
+        fanSpeed: status.fanSpeed ?? current.fanSpeed,
+        compressorEff: status.compressorEff ?? current.compressorEff,
+        timestamp: status.timestamp ?? current.timestamp,
+      }));
+    });
+    socket.on('energy_update', (stats: Partial<EnergyStats>) => {
+      setEnergyStats(current => ({
+        ...current,
+        ...stats,
+        currentLoad: stats.currentLoad ?? current.currentLoad,
+      }));
+    });
+    socket.on('alert_triggered', (alert: Alert) => {
+      setAlerts(current => [alert, ...current.filter(item => item.id !== alert.id)].slice(0, 5));
     });
 
     return () => {
+      mounted = false;
       clearInterval(interval);
       socket.disconnect();
     };
-  }, []);
+  }, [primary.zoneId]);
 
   return (
     <View style={styles.container}>
@@ -61,7 +127,7 @@ export default function DashboardScreen() {
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, { opacity: pulse ? 1 : 0.4 }]} />
             <Text style={styles.statusText}>
-              System Status: <Text style={styles.statusTextHighlight}>Stable Operations</Text>
+              System Status: <Text style={styles.statusTextHighlight}>{systemStable ? 'Stable Operations' : 'Attention Required'}</Text>
             </Text>
           </View>
         </View>
@@ -72,16 +138,16 @@ export default function DashboardScreen() {
           <View style={styles.cardHeader}>
             <View>
               <Text style={styles.cardLabel}>ACTIVE ZONE</Text>
-              <Text style={styles.cardTitle}>Storage Zone A</Text>
+              <Text style={styles.cardTitle}>{primary.zoneName}</Text>
               <View style={styles.cardSubStatus}>
                 <MaterialIcons name="ac-unit" size={16} color="#4edea3" />
-                <Text style={styles.cardSubStatusText}>Cooling Efficiency Stable</Text>
+                <Text style={styles.cardSubStatusText}>{energyStats.efficiency >= 90 ? 'Cooling Efficiency Stable' : 'Efficiency Drift Detected'}</Text>
               </View>
             </View>
             <View style={styles.tempContainer}>
               <View style={styles.tempRow}>
                 <MaterialIcons name="trending-down" size={20} color="#4edea3" />
-                <Text style={styles.tempText}>{sensorData.temperature.toFixed(1)}°</Text>
+                <Text style={styles.tempText}>{primary.temperature.toFixed(1)}°</Text>
               </View>
               <Text style={styles.tempUnit}>Celsius</Text>
             </View>
@@ -90,39 +156,39 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Humidity</Text>
-              <Text style={styles.statValue}>{sensorData.humidity}%</Text>
+              <Text style={styles.statValue}>{Math.round(primary.humidity)}%</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Cooling Efficiency</Text>
-              <Text style={styles.statValue}>{sensorData.efficiency}%</Text>
+              <Text style={styles.statValue}>{Math.round(energyStats.efficiency)}%</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Occupancy</Text>
-              <Text style={styles.statValue}>{sensorData.occupancy}</Text>
+              <Text style={styles.statValue}>{primary.occupancy}</Text>
             </View>
           </View>
 
           <View style={styles.metricsRow}>
             <View style={styles.metricItem}>
               <MaterialIcons name="bolt" size={16} color="#8aebff" />
-              <Text style={styles.metricText}>{sensorData.load.toFixed(1)} kW</Text>
+              <Text style={styles.metricText}>{energyStats.currentLoad.toFixed(1)} kW</Text>
             </View>
             <View style={styles.metricItem}>
               <MaterialIcons name="co2" size={16} color="#8aebff" />
-              <Text style={styles.metricText}>{sensorData.co2} ppm</Text>
+              <Text style={styles.metricText}>{Math.round(primary.co2)} ppm</Text>
             </View>
           </View>
 
           <View style={styles.alertBox}>
             <MaterialIcons name="auto-awesome" size={20} color="#4edea3" />
-            <Text style={styles.alertText}>Humidity rising in Storage Zone A. Airflow increased by 8% to maintain optimal cooling conditions.</Text>
+            <Text style={styles.alertText}>{activeAlert?.message ?? `${primary.zoneName} is operating inside target climate bands.`}</Text>
           </View>
         </View>
 
         {/* Card 2 */}
         <LinearGradient colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']} style={[styles.glassCard, { marginTop: 24 }]}>
           <View style={styles.card2Header}>
-            <Text style={styles.cardTitle}>Packaging Section</Text>
+            <Text style={styles.cardTitle}>{secondary.zoneName}</Text>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>Key Win!</Text>
             </View>
@@ -153,7 +219,7 @@ export default function DashboardScreen() {
             <View style={styles.card2Right}>
               <View style={styles.tempRow}>
                 <MaterialIcons name="trending-flat" size={24} color="#8aebff" />
-                <Text style={styles.largeTemp}>21.8°</Text>
+                <Text style={styles.largeTemp}>{secondary.temperature.toFixed(1)}°</Text>
               </View>
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: '75%' }]} />
@@ -164,16 +230,16 @@ export default function DashboardScreen() {
           <View style={[styles.metricsRow, { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' }]}>
             <View style={styles.metricItem}>
               <MaterialIcons name="bolt" size={16} color="#4edea3" />
-              <Text style={styles.metricText}>11.8 kW</Text>
+              <Text style={styles.metricText}>{Math.max(0, energyStats.currentLoad * 0.42).toFixed(1)} kW</Text>
             </View>
             <View style={styles.metricItem}>
               <MaterialIcons name="co2" size={16} color="#4edea3" />
-              <Text style={styles.metricText}>395 ppm</Text>
+              <Text style={styles.metricText}>{Math.round(secondary.co2)} ppm</Text>
             </View>
           </View>
 
           <View style={styles.noteLine}>
-            <Text style={styles.noteText}>Cooling adjusted due to increased loading dock activity.</Text>
+            <Text style={styles.noteText}>Cooling adjusted from live occupancy and airflow telemetry.</Text>
           </View>
         </LinearGradient>
 
@@ -181,25 +247,25 @@ export default function DashboardScreen() {
         <View style={[styles.glassCard, { marginTop: 24 }]}>
           <View style={styles.cardHeader}>
             <View>
-              <Text style={styles.cardTitle}>Cold Storage Unit</Text>
-              <Text style={styles.statusTextLight}>Status: <Text style={styles.statusTextWhite}>Low Activity</Text></Text>
+              <Text style={styles.cardTitle}>{tertiary.zoneName}</Text>
+              <Text style={styles.statusTextLight}>Status: <Text style={styles.statusTextWhite}>{tertiary.occupancy <= 6 ? 'Low Activity' : 'Active'}</Text></Text>
             </View>
             <View style={styles.tempContainer}>
               <View style={styles.tempRow}>
                 <MaterialIcons name="trending-up" size={18} color="rgba(187, 201, 205, 0.4)" />
-                <Text style={styles.mutedTemp}>23.0°</Text>
+                <Text style={styles.mutedTemp}>{tertiary.temperature.toFixed(1)}°</Text>
               </View>
             </View>
           </View>
           
           <View style={styles.splitRow}>
             <View style={styles.splitBox}>
-              <Text style={styles.splitBoxLabel}>Status: <Text style={styles.statusTextWhite}>Low Activity</Text></Text>
-              <Text style={styles.splitBoxValue}>45%</Text>
+              <Text style={styles.splitBoxLabel}>Occupancy</Text>
+              <Text style={styles.splitBoxValue}>{tertiary.occupancy}</Text>
             </View>
             <View style={styles.splitBox}>
               <Text style={styles.splitBoxLabel}>Cooling Score</Text>
-              <Text style={styles.splitBoxValue}>92</Text>
+              <Text style={styles.splitBoxValue}>{Math.round(energyStats.coolingScore)}</Text>
             </View>
           </View>
         </View>
@@ -208,13 +274,13 @@ export default function DashboardScreen() {
         <View style={[styles.glassCard, { marginTop: 24, paddingBottom: 20 }]}>
           <Text style={styles.cardTitle}>Airflow Distribution</Text>
           <View style={styles.graphContainer}>
-            <LinearGradient colors={['rgba(78, 222, 163, 0.4)', 'transparent']} style={[styles.bar, { height: 48 }]} />
-            <LinearGradient colors={['rgba(138, 235, 255, 0.4)', 'transparent']} style={[styles.bar, { height: 80 }]} />
-            <LinearGradient colors={['rgba(78, 222, 163, 0.6)', 'transparent']} style={[styles.bar, { height: 96 }]} />
-            <LinearGradient colors={['rgba(138, 235, 255, 0.3)', 'transparent']} style={[styles.bar, { height: 64 }]} />
-            <LinearGradient colors={['rgba(78, 222, 163, 0.5)', 'transparent']} style={[styles.bar, { height: 112 }]} />
-            <LinearGradient colors={['rgba(138, 235, 255, 0.4)', 'transparent']} style={[styles.bar, { height: 72 }]} />
-            <LinearGradient colors={['rgba(78, 222, 163, 0.4)', 'transparent']} style={[styles.bar, { height: 88 }]} />
+            {airflowBars.map((height, index) => (
+              <LinearGradient
+                key={`${height}-${index}`}
+                colors={[index % 2 === 0 ? 'rgba(78, 222, 163, 0.55)' : 'rgba(138, 235, 255, 0.45)', 'transparent']}
+                style={[styles.bar, { height }]}
+              />
+            ))}
           </View>
           <View style={styles.graphLabels}>
             <Text style={styles.graphLabelMuted}>08:00</Text>

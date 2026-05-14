@@ -8,12 +8,16 @@ datasource db {
 
 model SensorData {
   id          Int      @id @default(autoincrement())
-  zone        String
+  zoneId      Int
+  zone        Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   temperature Float
   humidity    Float
   co2         Float
   occupancy   Int
+  airflow     Float    @default(0)
   timestamp   DateTime @default(now())
+
+  @@index([zoneId, timestamp])
 }
 
 model SystemStatus {
@@ -21,5 +25,80 @@ model SystemStatus {
   efficiency     Float
   load           Float
   coolingScore   Float
+  carbonSaved    Float    @default(0)
+  fanSpeed       Float    @default(65)
+  compressorEff  Float    @default(94)
   timestamp      DateTime @default(now())
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  role      String   @default("operator")
+  createdAt DateTime @default(now())
+}
+
+model Zone {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  type        String
+  capacity    Int          @default(40)
+  targetTemp  Float        @default(22)
+  targetHum   Float        @default(45)
+  fanSpeed    Float        @default(65)
+  sensorData  SensorData[]
+  alerts      Alert[]
+  schedules   Schedule[]
+}
+
+model Alert {
+  id          Int       @id @default(autoincrement())
+  zoneId      Int
+  zone        Zone      @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  type        String
+  severity    String
+  message     String
+  isAcked     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  acknowledgedAt DateTime?
+
+  @@index([zoneId, isAcked, createdAt])
+}
+
+model Schedule {
+  id          Int      @id @default(autoincrement())
+  zoneId      Int
+  zone        Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  name        String
+  startTime   String
+  duration    Int
+  targetTemp  Float
+  targetHum   Float
+  mode        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model AIRecommendation {
+  id          Int      @id @default(autoincrement())
+  zoneId      Int?
+  type        String
+  message     String
+  confidence  Float
+  savings     Float
+  co2Trend    String   @default("stable")
+  applied     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model EnergyLog {
+  id             Int      @id @default(autoincrement())
+  hvacLoad       Float
+  optimizedLoad  Float
+  savingsPercent Float
+  carbonReduced  Float
+  timestamp      DateTime @default(now())
+
+  @@index([timestamp])
 }

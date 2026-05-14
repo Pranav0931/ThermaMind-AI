@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: thermamind
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d thermamind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ai-service:
+    build:
+      context: ./ai-service
+    environment:
+      MODEL_DIR: ./saved_models
+      LOG_LEVEL: info
+    ports:
+      - "8000:8000"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/thermamind
+      AI_SERVICE_URL: http://ai-service:8000
+      JWT_SECRET: docker-development-secret-change-me
+      PORT: 4000
+      CLIENT_ORIGIN: "*"
+      SENSOR_MODE: simulation
+      LOG_LEVEL: info
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    command: sh -c "npx prisma generate && npx prisma db push && node dist/server.js"
+
+volumes:
+  postgres-data:

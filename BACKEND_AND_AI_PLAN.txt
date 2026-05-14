@@ -1,0 +1,517 @@
+================================================================================
+                    THERMAMIND AI — BACKEND & AI INTEGRATION PLAN
+================================================================================
+                         Warehouse HVAC Intelligence Platform
+                              React Native (Expo) + Node.js
+================================================================================
+
+PROJECT OVERVIEW
+----------------
+ThermaMind AI is a warehouse climate management platform with 4 frontend screens:
+  1. Dashboard     — Live sensor data (temp, humidity, CO2, occupancy, efficiency)
+  2. Energy        — HVAC optimization, carbon reduction, fan/compressor controls
+  3. Insights      — Climate stability score, occupancy forecasting, AI recommendations
+  4. Schedule      — Global target profiles, daily schedules, forecast simulation
+
+Current backend: Bare Express + Socket.IO server emitting random-walk mock data.
+Database: PostgreSQL via Prisma (SensorData, SystemStatus models defined).
+
+================================================================================
+PHASE 1 — BACKEND FOUNDATION (Week 1-2)
+================================================================================
+
+1.1 PROJECT STRUCTURE
+---------------------
+backend/
+├── prisma/
+│   └── schema.prisma          # Extended DB schema
+├── src/
+│   ├── server.ts              # Entry point
+│   ├── config/
+│   │   ├── database.ts        # Prisma client singleton
+│   │   └── env.ts             # Environment config validation
+│   ├── routes/
+│   │   ├── sensor.routes.ts   # GET /api/sensors, GET /api/sensors/:zone
+│   │   ├── energy.routes.ts   # GET /api/energy/stats, GET /api/energy/history
+│   │   ├── schedule.routes.ts # CRUD /api/schedules
+│   │   ├── alerts.routes.ts   # GET /api/alerts, POST /api/alerts/acknowledge
+│   │   └── ai.routes.ts       # POST /api/ai/predict, POST /api/ai/recommend
+│   ├── services/
+│   │   ├── sensor.service.ts
+│   │   ├── energy.service.ts
+│   │   ├── schedule.service.ts
+│   │   ├── alert.service.ts
+│   │   └── ai.service.ts      # Orchestrates Python AI microservice calls
+│   ├── socket/
+│   │   └── realtime.ts        # Socket.IO event handlers
+│   ├── middleware/
+│   │   ├── auth.ts            # JWT auth middleware
+│   │   └── validate.ts        # Request validation (Zod)
+│   └── utils/
+│       └── logger.ts          # Structured logging (pino)
+├── .env
+├── package.json
+└── tsconfig.json
+
+1.2 EXTENDED PRISMA SCHEMA
+--------------------------
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  role      String   @default("operator")  // operator | admin
+  createdAt DateTime @default(now())
+}
+
+model Zone {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique   // "Storage Zone A", "Packaging Section"
+  type        String                 // "storage", "packaging", "cold_storage"
+  sensorData  SensorData[]
+  alerts      Alert[]
+  schedules   Schedule[]
+}
+
+model SensorData {
+  id          Int      @id @default(autoincrement())
+  zoneId      Int
+  zone        Zone     @relation(fields: [zoneId], references: [id])
+  temperature Float
+  humidity    Float
+  co2         Float
+  occupancy   Int
+  airflow     Float    @default(0)
+  timestamp   DateTime @default(now())
+  @@index([zoneId, timestamp])
+}
+
+model SystemStatus {
+  id             Int      @id @default(autoincrement())
+  efficiency     Float
+  load           Float    // kW
+  coolingScore   Float
+  carbonSaved    Float    @default(0)
+  fanSpeed       Float    @default(65)
+  compressorEff  Float    @default(94)
+  timestamp      DateTime @default(now())
+}
+
+model Alert {
+  id          Int      @id @default(autoincrement())
+  zoneId      Int
+  zone        Zone     @relation(fields: [zoneId], references: [id])
+  type        String   // "humidity_rise", "temp_spike", "co2_high", "occupancy_surge"
+  severity    String   // "info", "warning", "critical"
+  message     String
+  isAcked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Schedule {
+  id          Int      @id @default(autoincrement())
+  zoneId      Int
+  zone        Zone     @relation(fields: [zoneId], references: [id])
+  name        String   // "Active Operational Shift"
+  startTime   String   // "06:00"
+  duration    Int      // hours
+  targetTemp  Float
+  targetHum   Float
+  mode        String   // "full_load", "standby", "eco"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model AIRecommendation {
+  id          Int      @id @default(autoincrement())
+  type        String   // "airflow_redirect", "pre_cool", "setback"
+  message     String
+  confidence  Float
+  savings     Float    // percentage
+  applied     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model EnergyLog {
+  id             Int      @id @default(autoincrement())
+  hvacLoad       Float    // kW
+  optimizedLoad  Float    // kW (after AI optimization)
+  savingsPercent Float
+  carbonReduced  Float    // kg CO2
+  timestamp      DateTime @default(now())
+  @@index([timestamp])
+}
+
+1.3 REST API ENDPOINTS
+----------------------
+METHOD  ENDPOINT                        DESCRIPTION
+------  ------                          -----------
+GET     /api/sensors                    Latest readings for all zones
+GET     /api/sensors/:zoneId/history    Historical data (query: from, to, interval)
+GET     /api/energy/stats               Current energy KPIs (load, savings, carbon)
+GET     /api/energy/history             Energy usage over time
+GET     /api/schedules                  All schedule profiles
+POST    /api/schedules                  Create new schedule
+PUT     /api/schedules/:id             Update schedule
+DELETE  /api/schedules/:id             Delete schedule
+GET     /api/alerts                     Active alerts
+POST    /api/alerts/:id/acknowledge     Acknowledge an alert
+POST    /api/ai/predict                 Trigger occupancy/demand prediction
+POST    /api/ai/recommend              Get AI recommendation for a zone
+POST    /api/ai/simulate               Run forecast simulation
+GET     /api/system/status              Current system status
+
+1.4 SOCKET.IO EVENTS (REALTIME)
+-------------------------------
+Server -> Client:
+  "sensor_update"       — Every 2s, live sensor data per zone
+  "system_status"       — Every 5s, system efficiency/load
+  "alert_triggered"     — When anomaly detected
+  "ai_recommendation"   — When AI generates a new recommendation
+  "energy_update"       — Every 10s, energy optimization metrics
+
+Client -> Server:
+  "set_fan_speed"       — { zoneId, speed: "low"|"balanced"|"industrial"|"peak" }
+  "update_target"       — { zoneId, temperature, humidity }
+  "acknowledge_alert"   — { alertId }
+  "apply_recommendation"— { recommendationId }
+
+1.5 NEW DEPENDENCIES
+--------------------
+npm install typescript @types/node @types/express ts-node
+npm install zod pino pino-pretty jsonwebtoken bcryptjs
+npm install node-cron axios
+npm install @prisma/client prisma
+
+================================================================================
+PHASE 2 — AI/ML MICROSERVICE (Week 2-4)
+================================================================================
+
+2.1 AI SERVICE STRUCTURE (Python — FastAPI)
+-------------------------------------------
+ai-service/
+├── main.py                    # FastAPI entry point
+├── requirements.txt
+├── models/
+│   ├── occupancy_forecaster.py    # LSTM occupancy prediction
+│   ├── demand_predictor.py        # Cooling demand forecasting
+│   ├── anomaly_detector.py        # Isolation Forest anomaly detection
+│   ├── rl_optimizer.py            # RL agent for HVAC optimization
+│   └── recommendation_engine.py   # Rule-based + ML recommendation system
+├── data/
+│   ├── preprocessor.py        # Feature engineering pipeline
+│   └── synthetic_generator.py # Training data generator
+├── training/
+│   ├── train_occupancy.py
+│   ├── train_demand.py
+│   ├── train_anomaly.py
+│   └── train_rl.py
+├── saved_models/              # Serialized model weights (.pkl, .pt)
+└── config.py
+
+2.2 AI MODEL DETAILS
+---------------------
+
+MODEL 1: OCCUPANCY FORECASTER (Feeds → Insights Screen)
+  Purpose:  Predict warehouse zone occupancy 15-60 minutes ahead
+  Type:     LSTM (Long Short-Term Memory) neural network
+  Input:    [timestamp, zone, historical_occupancy (24h), day_of_week, hour]
+  Output:   Predicted occupancy count for next 4 intervals (15min each)
+  Training: Synthetic data simulating warehouse shift patterns
+  Library:  PyTorch
+  Endpoint: POST /predict/occupancy
+  Request:  { "zone_id": 1, "horizon_minutes": 60 }
+  Response: { "predictions": [12, 18, 24, 20], "confidence": 0.94 }
+
+MODEL 2: COOLING DEMAND PREDICTOR (Feeds → Energy Screen)
+  Purpose:  Forecast HVAC energy demand based on conditions
+  Type:     XGBoost regression
+  Input:    [temp, humidity, co2, occupancy, external_temp, time_of_day]
+  Output:   Predicted kW load for next hour
+  Training: Synthetic sensor data with seasonal patterns
+  Library:  XGBoost + scikit-learn
+  Endpoint: POST /predict/demand
+  Request:  { "zone_id": 1, "current_conditions": {...} }
+  Response: { "predicted_load_kw": 14.8, "optimal_load_kw": 11.2, "savings": 24.3 }
+
+MODEL 3: ANOMALY DETECTOR (Feeds → Dashboard Alerts)
+  Purpose:  Detect unusual sensor patterns (temp spikes, CO2 surges)
+  Type:     Isolation Forest + threshold rules
+  Input:    [temp, humidity, co2, occupancy, airflow] (rolling 30min window)
+  Output:   Anomaly score (0-1) + anomaly type classification
+  Library:  scikit-learn
+  Endpoint: POST /detect/anomaly
+  Request:  { "zone_id": 1, "readings": [...last_15_readings] }
+  Response: { "is_anomaly": true, "score": 0.87, "type": "humidity_rise",
+              "message": "Humidity rising in Storage Zone A..." }
+
+MODEL 4: RL HVAC OPTIMIZER (Feeds → Energy Screen + Dashboard)
+  Purpose:  Optimize HVAC setpoints to minimize energy while maintaining comfort
+  Type:     Deep Q-Network (DQN) reinforcement learning agent
+  State:    [temp, humidity, co2, occupancy, external_temp, current_setpoint,
+             fan_speed, time_of_day, energy_price]
+  Actions:  [increase_cooling, decrease_cooling, increase_fan, decrease_fan,
+             maintain, eco_mode, boost_mode]
+  Reward:   - energy_consumed * 0.4
+            - abs(temp - target_temp) * 0.3
+            - abs(humidity - target_humidity) * 0.2
+            + comfort_score * 0.1
+  Library:  PyTorch + Stable-Baselines3
+  Endpoint: POST /optimize/hvac
+  Request:  { "zone_id": 1, "current_state": {...}, "target": {...} }
+  Response: { "action": "decrease_cooling", "new_setpoint": 22.8,
+              "fan_speed": 65, "predicted_savings": 12.5,
+              "efficiency_score": 98.2 }
+
+MODEL 5: RECOMMENDATION ENGINE (Feeds → Insights Screen AI Card)
+  Purpose:  Generate human-readable operational recommendations
+  Type:     Rule-based engine + Gemini API for natural language generation
+  Input:    Outputs from Models 1-4 + current system state
+  Output:   Prioritized recommendations with confidence/savings
+  Endpoint: POST /recommend
+  Request:  { "zone_id": 1 }
+  Response: { "recommendation": "Occupancy predicted to increase...",
+              "confidence": 0.94, "savings_percent": 12.5,
+              "co2_trend": "stable", "type": "airflow_redirect" }
+
+2.3 PYTHON DEPENDENCIES (requirements.txt)
+-------------------------------------------
+fastapi==0.115.0
+uvicorn==0.30.0
+torch==2.4.0
+xgboost==2.1.0
+scikit-learn==1.5.0
+numpy==2.0.0
+pandas==2.2.0
+stable-baselines3==2.3.0
+google-generativeai==0.8.0   # For Gemini API (recommendation NLG)
+pydantic==2.9.0
+httpx==0.27.0
+joblib==1.4.0
+
+================================================================================
+PHASE 3 — INTEGRATION ARCHITECTURE (Week 3-5)
+================================================================================
+
+3.1 SYSTEM ARCHITECTURE DIAGRAM
+--------------------------------
+
+  ┌─────────────────────────────────────────────────────────┐
+  │                   REACT NATIVE APP (Expo)               │
+  │  ┌──────────┐ ┌────────┐ ┌──────────┐ ┌──────────────┐ │
+  │  │Dashboard │ │Energy  │ │Insights  │ │Schedule      │ │
+  │  └────┬─────┘ └───┬────┘ └────┬─────┘ └──────┬───────┘ │
+  │       │           │           │               │         │
+  │       └───────────┴───────┬───┴───────────────┘         │
+  │                           │                             │
+  │              Socket.IO + REST API calls                 │
+  └───────────────────────────┼─────────────────────────────┘
+                              │
+                              ▼
+  ┌───────────────────────────────────────────────────────────┐
+  │              NODE.JS BACKEND (Express + Socket.IO)        │
+  │                                                           │
+  │  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌─────────┐ │
+  │  │REST API  │  │Socket.IO  │  │Scheduler │  │Alert    │ │
+  │  │Routes    │  │Realtime   │  │(node-cron)│  │Engine   │ │
+  │  └────┬─────┘  └─────┬─────┘  └─────┬─────┘  └────┬────┘ │
+  │       │              │              │              │      │
+  │       └──────────────┴──────┬───────┴──────────────┘      │
+  │                             │                             │
+  │               ┌─────────────┼────────────────┐            │
+  │               ▼             ▼                ▼            │
+  │        ┌───────────┐  ┌──────────┐  ┌──────────────┐     │
+  │        │Prisma ORM │  │AI Service│  │Sensor Ingest │     │
+  │        │(PostgreSQL)│  │Client   │  │(mock/IoT)    │     │
+  │        └─────┬──────┘  └────┬─────┘  └──────────────┘     │
+  └──────────────┼──────────────┼─────────────────────────────┘
+                 │              │
+                 ▼              ▼
+  ┌──────────────────┐  ┌──────────────────────────────────────┐
+  │   PostgreSQL DB  │  │    PYTHON AI MICROSERVICE (FastAPI)   │
+  │                  │  │                                      │
+  │  - SensorData    │  │  ┌─────────────┐  ┌──────────────┐  │
+  │  - SystemStatus  │  │  │ Occupancy   │  │ Demand       │  │
+  │  - Zones         │  │  │ Forecaster  │  │ Predictor    │  │
+  │  - Alerts        │  │  │ (LSTM)      │  │ (XGBoost)    │  │
+  │  - Schedules     │  │  └─────────────┘  └──────────────┘  │
+  │  - EnergyLog     │  │  ┌─────────────┐  ┌──────────────┐  │
+  │  - AIRecommend.  │  │  │ Anomaly     │  │ RL HVAC      │  │
+  │                  │  │  │ Detector    │  │ Optimizer    │  │
+  │                  │  │  │ (IsoForest) │  │ (DQN)        │  │
+  │                  │  │  └─────────────┘  └──────────────┘  │
+  │                  │  │  ┌──────────────────────────────┐   │
+  │                  │  │  │ Recommendation Engine        │   │
+  │                  │  │  │ (Rules + Gemini API)         │   │
+  │                  │  │  └──────────────────────────────┘   │
+  └──────────────────┘  └──────────────────────────────────────┘
+
+3.2 DATA FLOW — REALTIME LOOP
+------------------------------
+Every 2 seconds:
+  1. Sensor Ingest generates/receives sensor readings
+  2. Data saved to PostgreSQL via Prisma
+  3. Readings sent to Anomaly Detector → returns anomaly status
+  4. If anomaly → Alert created + pushed via Socket.IO "alert_triggered"
+  5. Sensor data pushed via Socket.IO "sensor_update" to all clients
+
+Every 30 seconds:
+  6. Batch of recent readings sent to RL Optimizer
+  7. RL agent returns optimal HVAC action
+  8. SystemStatus updated (efficiency, load, cooling score)
+  9. Energy savings computed and logged to EnergyLog
+  10. System status pushed via Socket.IO "system_status"
+
+Every 5 minutes:
+  11. Occupancy Forecaster generates predictions for next hour
+  12. Demand Predictor forecasts energy needs
+  13. Recommendation Engine combines all model outputs
+  14. AIRecommendation record created
+  15. Pushed via Socket.IO "ai_recommendation"
+
+3.3 FRONTEND INTEGRATION CHANGES
+---------------------------------
+
+DashboardScreen.tsx:
+  - Replace single mock socket listener with multi-zone support
+  - Add real alert rendering from "alert_triggered" events
+  - Connect airflow chart to historical sensor data API
+
+EnergyScreen.tsx:
+  - Fetch /api/energy/stats for KPIs (carbon, efficiency score)
+  - Fetch /api/energy/history for the comparison chart data
+  - Connect fan speed buttons to "set_fan_speed" socket event
+  - Live update HVAC load from "energy_update" events
+
+InsightsScreen.tsx:
+  - Fetch occupancy predictions from /api/ai/predict
+  - Render bar graph from actual prediction array
+  - Fetch AI recommendation from /api/ai/recommend
+  - Display real confidence/savings/CO2 trend values
+  - Connect "View Operational Analytics" to detailed history
+
+ScheduleScreen.tsx:
+  - CRUD operations via /api/schedules endpoints
+  - Slider changes → POST /api/schedules (save button)
+  - "Run Simulation" → POST /api/ai/simulate
+  - Timeline populated from real schedule data
+
+================================================================================
+PHASE 4 — SENSOR SIMULATION & DATA PIPELINE (Week 2-3)
+================================================================================
+
+4.1 SENSOR SIMULATOR (replaces current random walk)
+----------------------------------------------------
+File: backend/src/services/sensorSimulator.ts
+
+Features:
+  - Realistic multi-zone simulation (3 zones: Storage A, Packaging, Cold Storage)
+  - Time-of-day patterns (higher occupancy 06:00-14:00, lower at night)
+  - Seasonal temperature influence
+  - Occupancy-driven CO2 and humidity correlation
+  - Random events (door opening → temp spike, shift change → occupancy surge)
+  - Configurable via .env for demo vs production mode
+
+4.2 DATA RETENTION POLICY
+--------------------------
+  - Raw sensor data: Keep 30 days, then downsample to 1-hour averages
+  - Energy logs: Keep 1 year
+  - Alerts: Keep 90 days
+  - AI recommendations: Keep 30 days
+  - Implement via node-cron job running daily at 02:00
+
+================================================================================
+PHASE 5 — ALERT ENGINE (Week 3-4)
+================================================================================
+
+5.1 THRESHOLD-BASED ALERTS
+---------------------------
+  Temperature > 25°C or < 18°C        → WARNING
+  Temperature > 28°C or < 15°C        → CRITICAL
+  Humidity > 60% or < 30%             → WARNING
+  CO2 > 800 ppm                       → WARNING
+  CO2 > 1000 ppm                      → CRITICAL
+  Occupancy > zone_capacity * 0.9     → WARNING
+
+5.2 AI-DRIVEN ALERTS
+---------------------
+  Anomaly detector score > 0.7        → WARNING (with ML-generated message)
+  Anomaly detector score > 0.9        → CRITICAL
+  Occupancy forecast predicts surge   → INFO (pre-emptive)
+
+================================================================================
+PHASE 6 — DEPLOYMENT & DEVOPS (Week 5-6)
+================================================================================
+
+6.1 DOCKER SETUP
+-----------------
+docker-compose.yml:
+  services:
+    postgres:     PostgreSQL 16 (port 5432)
+    backend:      Node.js Express server (port 4000)
+    ai-service:   Python FastAPI (port 8000)
+    redis:        Redis for caching sensor data (port 6379) [optional]
+
+6.2 ENVIRONMENT VARIABLES
+--------------------------
+# Backend (.env)
+DATABASE_URL=postgresql://postgres:password@localhost:5432/thermamind
+AI_SERVICE_URL=http://localhost:8000
+JWT_SECRET=<secret>
+PORT=4000
+SENSOR_MODE=simulation    # "simulation" or "mqtt" (for real sensors)
+
+# AI Service (.env)
+GEMINI_API_KEY=<key>      # For recommendation NLG
+MODEL_DIR=./saved_models
+LOG_LEVEL=info
+
+================================================================================
+IMPLEMENTATION PRIORITY & TIMELINE
+================================================================================
+
+Week 1:  Backend restructure (TypeScript, routes, Prisma schema migration)
+         Sensor simulator with realistic patterns
+         REST endpoints for sensors + schedules
+
+Week 2:  Socket.IO multi-zone realtime events
+         Alert engine (threshold-based)
+         Python AI service scaffold + Anomaly Detector
+
+Week 3:  Occupancy Forecaster (LSTM) training + endpoint
+         Demand Predictor (XGBoost) training + endpoint
+         Frontend integration (Dashboard + Energy screens)
+
+Week 4:  RL HVAC Optimizer (DQN) training + endpoint
+         Recommendation Engine + Gemini NLG
+         Frontend integration (Insights + Schedule screens)
+
+Week 5:  End-to-end testing, Docker setup
+         Performance tuning, data retention jobs
+         Forecast simulation feature
+
+Week 6:  Polish, documentation, demo preparation
+         Load testing, edge case handling
+         Final deployment
+
+================================================================================
+KEY TECHNOLOGY DECISIONS
+================================================================================
+
+1. Node.js backend (not Python) — keeps consistency with existing server.js,
+   Socket.IO runs natively, REST API is straightforward.
+
+2. Separate Python microservice for AI — PyTorch/scikit-learn ecosystem is
+   far superior for ML. Node calls Python via HTTP (axios → FastAPI).
+
+3. PostgreSQL — already configured via Prisma. Excellent for time-series
+   queries with proper indexing. TimescaleDB extension possible later.
+
+4. Gemini API for NLG — generates natural language recommendations from
+   raw model outputs. Keeps recommendations contextual and readable.
+
+5. DQN over PPO for RL — simpler to train with discrete action space,
+   more stable for the HVAC control problem at this scale.
+
+================================================================================
+                              END OF PLAN
+================================================================================

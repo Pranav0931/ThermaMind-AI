@@ -1,6 +1,6 @@
 import { dataStore } from "./dataStore";
 import { sensorSimulator } from "./sensorSimulator";
-import { FanSpeedMode } from "../types/domain";
+import { FanSpeedMode, SensorReading } from "../types/domain";
 
 class SensorService {
   async initialize() {
@@ -31,6 +31,12 @@ class SensorService {
 
   async getHistory(zoneId: number, options: { from?: Date; to?: Date; limit?: number }) {
     return dataStore.getSensorHistory(zoneId, options.from, options.to, options.limit ?? 250);
+  }
+
+  applyManualReading(reading: SensorReading | null | undefined) {
+    if (reading) {
+      sensorSimulator.applyManualReading(reading);
+    }
   }
 
   async setFanSpeed(zoneId: number, speed: FanSpeedMode) {

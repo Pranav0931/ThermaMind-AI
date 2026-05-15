@@ -77,7 +77,9 @@ def _apply_action(row: dict, zone_id: int, action: str) -> tuple[float, float]:
 
 def _reward(row: dict, zone_id: int, action: str) -> float:
     setpoint, fan = _apply_action(row, zone_id, action)
-    target_temp, target_humidity = zone_targets(zone_id)
+    default_temp, default_humidity = zone_targets(zone_id)
+    target_temp = safe_float(row.get("target_temp"), default_temp)
+    target_humidity = safe_float(row.get("target_humidity"), default_humidity)
     temperature = safe_float(row.get("temperature"), target_temp)
     humidity = safe_float(row.get("humidity"), target_humidity)
     occupancy = safe_float(row.get("occupancy"), zone_capacity(zone_id) * 0.3)
@@ -90,6 +92,44 @@ def _reward(row: dict, zone_id: int, action: str) -> float:
     occupancy_bonus = 0.4 if occupancy > zone_capacity(zone_id) * 0.65 and action in {"boost_mode", "increase_fan"} else 0
     eco_bonus = 0.5 if occupancy < zone_capacity(zone_id) * 0.2 and action in {"eco_mode", "decrease_cooling"} else 0
     return occupancy_bonus + eco_bonus - energy_penalty - comfort_penalty
+
+
+def _schedule_samples(zone_id: int, schedule: dict, current_state: dict | None) -> tuple[np.ndarray, np.ndarray]:
+    current_state = current_state or {}
+    target_temp, target_humidity = zone_targets(zone_id)
+    target_temp = safe_float(schedule.get("target_temp", schedule.get("targetTemp")), target_temp)
+    target_humidity = safe_float(schedule.get("target_humidity", schedule.get("targetHum")), target_humidity)
+    mode = str(schedule.get("mode", "full_load"))
+    duration = max(1, int(safe_float(schedule.get("duration"), 8)))
+    capacity = zone_capacity(zone_id)
+    occupancy_ratio = {"full_load": 0.78, "standby": 0.32, "eco": 0.14}.get(mode, 0.52)
+    base_temp = safe_float(current_state.get("temperature"), target_temp)
+    base_humidity = safe_float(current_state.get("humidity"), target_humidity)
+    base_co2 = safe_float(current_state.get("co2"), 420)
+    base_airflow = safe_float(current_state.get("airflow"), 65)
+
+    rows: list[dict] = []
+    for idx in range(max(48, duration * 12)):
+        phase = (idx % 12) / 12
+        occupancy = max(0, min(capacity, capacity * (occupancy_ratio + np.sin(phase * np.pi) * 0.08)))
+        rows.append(
+            {
+                "temperature": base_temp + np.sin(idx / 6) * 0.35 + (occupancy / max(capacity, 1)) * 0.25,
+                "humidity": base_humidity + np.cos(idx / 7) * 1.2 + (target_humidity - base_humidity) * 0.1,
+                "co2": base_co2 + occupancy * 4.5,
+                "occupancy": occupancy,
+                "airflow": base_airflow,
+                "external_temp": safe_float(current_state.get("external_temp"), 25),
+                "target_temp": target_temp,
+                "target_humidity": target_humidity,
+                "energy_price": safe_float(current_state.get("energy_price"), 0.14),
+                "hvac_load": safe_float(current_state.get("hvac_load"), 10) + occupancy * 0.12,
+            }
+        )
+
+    features = np.stack([_state_features(row, zone_id) for row in rows])
+    rewards = np.stack([[_reward(row, zone_id, action) for action in ACTIONS] for row in rows]).astype(np.float32)
+    return features, rewards
 
 
 def train_and_save(force: bool = False) -> QNetwork:
@@ -133,7 +173,7 @@ def _load() -> QNetwork | None:
     global _model, _normalizer
     if not ARTIFACT.exists():
         return None
-    payload = torch.load(ARTIFACT, map_location="cpu")
+    payload = torch.load(ARTIFACT, map_location="cpu", weights_only=False)
     model = QNetwork(input_size=int(payload["input_size"]), action_count=len(ACTIONS))
     model.load_state_dict(payload["state_dict"])
     _model = model.eval()
@@ -150,6 +190,40 @@ def _get_model() -> QNetwork:
             return _model
         loaded = _load()
         return loaded if loaded is not None else train_and_save(force=True)
+
+
+def adapt_policy_to_schedule(zone_id: int, schedule: dict, current_state: dict | None = None) -> dict:
+    global _model
+    model = _get_model()
+    features, rewards = _schedule_samples(zone_id, schedule, current_state)
+    assert _normalizer is not None
+    mean, std = _normalizer
+    x_train = torch.tensor((features - mean) / std, dtype=torch.float32)
+    y_train = torch.tensor(rewards, dtype=torch.float32)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
+    loss_fn = nn.MSELoss()
+
+    model.train()
+    for _epoch in range(3):
+        permutation = torch.randperm(x_train.shape[0])
+        for start in range(0, x_train.shape[0], 32):
+            batch_idx = permutation[start : start + 32]
+            loss = loss_fn(model(x_train[batch_idx]), y_train[batch_idx])
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+    _model = model.eval()
+    torch.save({"state_dict": _model.state_dict(), "mean": mean, "std": std, "input_size": features.shape[-1]}, ARTIFACT)
+    target = {
+        "temperature": schedule.get("target_temp", schedule.get("targetTemp")),
+        "humidity": schedule.get("target_humidity", schedule.get("targetHum")),
+    }
+    return {
+        "policy_updated": True,
+        "training_samples": int(features.shape[0]),
+        "optimization": optimize_hvac(zone_id, current_state or {}, target),
+    }
 
 
 def optimize_hvac(zone_id: int, current_state: dict, target: dict | None) -> dict:

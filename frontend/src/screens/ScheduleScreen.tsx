@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -8,6 +8,7 @@ import AmbientGlow from '../components/AmbientGlow';
 import Slider from '@react-native-community/slider';
 import {
   Schedule,
+  SchedulePolicyResult,
   SimulationResult,
   deleteApi,
   getApi,
@@ -18,8 +19,15 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const [temperature, setTemperature] = useState(22);
   const [humidity, setHumidity] = useState(45);
+  const [zoneId, setZoneId] = useState(1);
+  const [profileName, setProfileName] = useState('Custom Shift Profile');
+  const [startTime, setStartTime] = useState('06:00');
+  const [duration, setDuration] = useState('8');
+  const [mode, setMode] = useState<'full_load' | 'standby' | 'eco'>('full_load');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
+  const [policyResult, setPolicyResult] = useState<SchedulePolicyResult | null>(null);
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -32,6 +40,11 @@ export default function ScheduleScreen() {
           if (data[0]) {
             setTemperature(data[0].targetTemp);
             setHumidity(data[0].targetHum);
+            setZoneId(data[0].zoneId);
+            setProfileName(data[0].name);
+            setStartTime(data[0].startTime);
+            setDuration(String(data[0].duration));
+            setMode(data[0].mode === 'standby' || data[0].mode === 'eco' ? data[0].mode : 'full_load');
           }
         }
       } catch {
@@ -48,18 +61,38 @@ export default function ScheduleScreen() {
     };
   }, []);
 
-  async function saveProfile() {
-    const created = await postApi<Schedule>('/api/schedules', {
-      zoneId: 1,
-      name: 'Global Target Profile',
-      startTime: '06:00',
-      duration: 8,
-      targetTemp: Number(temperature.toFixed(1)),
-      targetHum: Math.round(humidity),
-      mode: 'full_load',
+  function schedulePayload(overrides?: Partial<{ targetTemp: number; targetHum: number }>) {
+    return {
+      zoneId,
+      name: profileName.trim() || 'Custom Shift Profile',
+      startTime,
+      duration: Math.max(1, Math.min(24, Number(duration) || 8)),
+      targetTemp: Number((overrides?.targetTemp ?? temperature).toFixed(1)),
+      targetHum: Math.round(overrides?.targetHum ?? humidity),
+      mode,
       isActive: true,
-    });
+    };
+  }
+
+  async function runPolicyOptimization(overrides?: Partial<{ targetTemp: number; targetHum: number }>) {
+    setIsOptimizing(true);
+    try {
+      const result = await postApi<SchedulePolicyResult>('/api/ai/schedule/optimize', schedulePayload(overrides));
+      setPolicyResult(result);
+      return result;
+    } catch {
+      setPolicyResult(null);
+      return null;
+    } finally {
+      setIsOptimizing(false);
+    }
+  }
+
+  async function saveProfile() {
+    const payload = schedulePayload();
+    const created = await postApi<Schedule>('/api/schedules', payload);
     setSchedules(current => [created, ...current.filter(item => item.id !== created.id)]);
+    await runPolicyOptimization();
   }
 
   async function removeSchedule(id: number) {
@@ -69,12 +102,13 @@ export default function ScheduleScreen() {
 
   async function runSimulation() {
     const result = await postApi<SimulationResult>('/api/ai/simulate', {
-      zoneId: 1,
+      zoneId,
       targetTemp: Number(temperature.toFixed(1)),
       targetHum: Math.round(humidity),
       horizonHours: 24,
     });
     setSimulation(result);
+    await runPolicyOptimization();
   }
 
   return (
@@ -103,12 +137,45 @@ export default function ScheduleScreen() {
         <View style={styles.glassPanel}>
           <View style={styles.cardHeader}>
             <View>
-              <Text style={styles.cardTitle}>Global Target Profile</Text>
-              <Text style={styles.cardSubtitle}>Baseline Climate Settings</Text>
+              <Text style={styles.cardTitle}>Custom Schedule Profile</Text>
+              <Text style={styles.cardSubtitle}>RL-trained schedule controls</Text>
             </View>
             <TouchableOpacity style={styles.saveBtn} onPress={saveProfile}>
               <Text style={styles.saveBtnText}>Save</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.formGrid}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Profile Name</Text>
+              <TextInput value={profileName} onChangeText={setProfileName} style={styles.textInput} placeholderTextColor="rgba(187, 201, 205, 0.45)" />
+            </View>
+            <View style={styles.formRow}>
+              <View style={[styles.inputGroup, styles.smallInput]}>
+                <Text style={styles.inputLabel}>Start</Text>
+                <TextInput value={startTime} onChangeText={setStartTime} style={styles.textInput} placeholder="06:00" placeholderTextColor="rgba(187, 201, 205, 0.45)" />
+              </View>
+              <View style={[styles.inputGroup, styles.smallInput]}>
+                <Text style={styles.inputLabel}>Hours</Text>
+                <TextInput value={duration} onChangeText={setDuration} keyboardType="numeric" style={styles.textInput} placeholderTextColor="rgba(187, 201, 205, 0.45)" />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.pillRow}>
+            {[1, 2, 3].map(item => (
+              <TouchableOpacity key={item} style={[styles.pill, zoneId === item && styles.pillActive]} onPress={() => setZoneId(item)}>
+                <Text style={[styles.pillText, zoneId === item && styles.pillTextActive]}>Zone {item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.pillRow}>
+            {(['full_load', 'standby', 'eco'] as const).map(item => (
+              <TouchableOpacity key={item} style={[styles.pill, mode === item && styles.pillActive]} onPress={() => setMode(item)}>
+                <Text style={[styles.pillText, mode === item && styles.pillTextActive]}>{item.replace('_', ' ')}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Temperature Slider */}
@@ -124,6 +191,7 @@ export default function ScheduleScreen() {
               maximumValue={30}
               value={temperature}
               onValueChange={setTemperature}
+              onSlidingComplete={value => void runPolicyOptimization({ targetTemp: value })}
               minimumTrackTintColor="#8aebff"
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#8aebff"
@@ -143,10 +211,45 @@ export default function ScheduleScreen() {
               maximumValue={60}
               value={humidity}
               onValueChange={setHumidity}
+              onSlidingComplete={value => void runPolicyOptimization({ targetHum: value })}
               minimumTrackTintColor="#4edea3"
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#4edea3"
             />
+          </View>
+
+          <View style={styles.policyPanel}>
+            <View style={styles.policyHeader}>
+              <Text style={styles.policyTitle}>RL HVAC Output</Text>
+              {isOptimizing && <ActivityIndicator color="#8aebff" />}
+            </View>
+            {policyResult ? (
+              <>
+                <View style={styles.policyGrid}>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyLabel}>Action</Text>
+                    <Text style={styles.policyValue}>{policyResult.optimization.action.replace('_', ' ')}</Text>
+                  </View>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyLabel}>Airflow</Text>
+                    <Text style={styles.policyValue}>{policyResult.optimization.fanSpeed}%</Text>
+                  </View>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyLabel}>Setpoint</Text>
+                    <Text style={styles.policyValue}>{policyResult.optimization.newSetpoint}C</Text>
+                  </View>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyLabel}>Savings</Text>
+                    <Text style={styles.policyValue}>{policyResult.optimization.predictedSavings}%</Text>
+                  </View>
+                </View>
+                <Text style={styles.trainingText}>
+                  {policyResult.policyUpdated ? `${policyResult.trainingSamples} schedule samples applied to the RL policy.` : 'Local optimizer fallback used for this profile.'}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.trainingText}>Move a target or save a profile to generate the AI control output.</Text>
+            )}
           </View>
         </View>
 
@@ -297,6 +400,63 @@ const styles = StyleSheet.create({
     color: '#8aebff',
     fontWeight: 'bold',
   },
+  formGrid: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  inputGroup: {
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 12,
+  },
+  smallInput: {
+    flex: 1,
+  },
+  inputLabel: {
+    color: '#bbc9cd',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  textInput: {
+    color: '#e0e3e6',
+    fontSize: 16,
+    fontWeight: '700',
+    padding: 0,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  pillActive: {
+    backgroundColor: 'rgba(78, 222, 163, 0.15)',
+    borderColor: 'rgba(78, 222, 163, 0.4)',
+  },
+  pillText: {
+    color: '#bbc9cd',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  pillTextActive: {
+    color: '#4edea3',
+  },
   sliderSection: {
     marginBottom: 24,
   },
@@ -318,6 +478,53 @@ const styles = StyleSheet.create({
   slider: {
     width: '100%',
     height: 40,
+  },
+  policyPanel: {
+    backgroundColor: 'rgba(138, 235, 255, 0.06)',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 235, 255, 0.18)',
+  },
+  policyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  policyTitle: {
+    color: '#e0e3e6',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  policyGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  policyMetric: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  policyLabel: {
+    color: '#bbc9cd',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  policyValue: {
+    color: '#8aebff',
+    fontSize: 16,
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+  trainingText: {
+    color: '#bbc9cd',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 10,
   },
   sectionContainer: {
     gap: 16,

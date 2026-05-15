@@ -36,6 +36,18 @@ export class SensorSimulator {
     return dataStore.createSensorReadings(readings);
   }
 
+  applyManualReading(reading: SensorReading) {
+    this.state.set(reading.zoneId, {
+      temperature: reading.temperature,
+      humidity: reading.humidity,
+      co2: reading.co2,
+      occupancy: reading.occupancy,
+      airflow: reading.airflow,
+      eventHeat: 0,
+      eventHumidity: 0,
+    });
+  }
+
   async setFanSpeed(zoneId: number, mode: FanSpeedMode) {
     const fanSpeed = FAN_SPEEDS[mode];
     const zone = await dataStore.updateZoneControls(zoneId, { fanSpeed });

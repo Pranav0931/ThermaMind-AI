@@ -8,8 +8,10 @@ import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'reac
 import {
   EnergyLog,
   EnergyStats,
+  SensorReading,
   createRealtimeSocket,
   fallbackEnergyStats,
+  fallbackReadings,
   getApi,
 } from '../services/thermamindApi';
 
@@ -40,23 +42,32 @@ export default function EnergyScreen() {
   const insets = useSafeAreaInsets();
   const [stats, setStats] = useState<EnergyStats>(fallbackEnergyStats);
   const [history, setHistory] = useState<EnergyLog[]>([]);
+  const [readings, setReadings] = useState<SensorReading[]>(fallbackReadings);
+  const [selectedZoneId, setSelectedZoneId] = useState(fallbackReadings[0].zoneId);
   const [activeFanMode, setActiveFanMode] = useState<(typeof fanModes)[number]['value']>('balanced');
 
   const optimizedPath = useMemo(() => chartPath(history.map(item => item.optimizedLoad), 150), [history]);
   const standardPath = useMemo(() => chartPath(history.map(item => item.hvacLoad), 150), [history]);
+  const zones = readings.length ? readings : fallbackReadings;
+  const selectedZone = zones.find(zone => zone.zoneId === selectedZoneId) ?? zones[0] ?? fallbackReadings[0];
 
   useEffect(() => {
     let mounted = true;
 
     async function loadEnergyData() {
       try {
-        const [nextStats, nextHistory] = await Promise.all([
+        const [nextStats, nextHistory, latestReadings] = await Promise.all([
           getApi<EnergyStats>('/api/energy/stats'),
           getApi<EnergyLog[]>('/api/energy/history?limit=24'),
+          getApi<SensorReading[]>('/api/sensors'),
         ]);
         if (mounted) {
           setStats(nextStats);
           setHistory(nextHistory);
+          if (latestReadings.length) {
+            setReadings(latestReadings);
+            setSelectedZoneId(current => latestReadings.some(reading => reading.zoneId === current) ? current : latestReadings[0].zoneId);
+          }
         }
       } catch {
         if (mounted) {
@@ -68,6 +79,11 @@ export default function EnergyScreen() {
     void loadEnergyData();
 
     const socket = createRealtimeSocket();
+    socket.on('sensor_update', (payload: { data?: SensorReading[] }) => {
+      if (payload.data?.length) {
+        setReadings(payload.data);
+      }
+    });
     socket.on('energy_update', (payload: EnergyStats | EnergyLog) => {
       if ('optimizedLoad' in payload) {
         setHistory(current => [...current.slice(-23), payload]);
@@ -97,7 +113,7 @@ export default function EnergyScreen() {
     setActiveFanMode(mode);
     const socket = createRealtimeSocket();
     const timeout = setTimeout(() => socket.disconnect(), 1500);
-    socket.emit('set_fan_speed', { zoneId: 1, speed: mode }, () => {
+    socket.emit('set_fan_speed', { zoneId: selectedZone.zoneId, speed: mode }, () => {
       clearTimeout(timeout);
       socket.disconnect();
     });
@@ -162,6 +178,18 @@ export default function EnergyScreen() {
           </View>
         </View>
 
+        <View style={styles.zoneSelector}>
+          {zones.map(zone => (
+            <TouchableOpacity
+              key={zone.zoneId}
+              style={[styles.zoneChip, selectedZoneId === zone.zoneId && styles.zoneChipActive]}
+              onPress={() => setSelectedZoneId(zone.zoneId)}
+            >
+              <Text style={[styles.zoneChipText, selectedZoneId === zone.zoneId && styles.zoneChipTextActive]}>{zone.zoneName}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* KPI Cards Grid */}
         <View style={styles.kpiGrid}>
           {/* Carbon Reduction */}
@@ -220,10 +248,10 @@ export default function EnergyScreen() {
                 </View>
                 <View>
                   <Text style={styles.statusItemTitle}>Fan Speed</Text>
-                  <Text style={styles.statusItemSubtitle}>Airflow Distribution</Text>
+                  <Text style={styles.statusItemSubtitle}>{selectedZone.zoneName}</Text>
                 </View>
               </View>
-              <Text style={[styles.statusItemValueLarge, { color: '#8aebff' }]}>{Math.round(stats.fanSpeed)}%</Text>
+              <Text style={[styles.statusItemValueLarge, { color: '#8aebff' }]}>{Math.round(selectedZone.airflow)}%</Text>
             </View>
 
             <View style={styles.fanBtnsRow}>
@@ -328,6 +356,31 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  zoneSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  zoneChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  zoneChipActive: {
+    backgroundColor: 'rgba(78, 222, 163, 0.15)',
+    borderColor: 'rgba(78, 222, 163, 0.4)',
+  },
+  zoneChipText: {
+    color: '#bbc9cd',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  zoneChipTextActive: {
+    color: '#4edea3',
   },
   cyanGlow: {
     shadowColor: '#8aebff',

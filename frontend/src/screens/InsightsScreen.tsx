@@ -6,17 +6,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import AmbientGlow from '../components/AmbientGlow';
 import {
+  OccupancyPrediction,
   Recommendation,
   SensorReading,
   fallbackReadings,
   getApi,
   postApi,
 } from '../services/thermamindApi';
-
-interface OccupancyPrediction {
-  predictions: number[];
-  confidence: number;
-}
 
 export default function InsightsScreen() {
   const insets = useSafeAreaInsets();
@@ -44,14 +40,16 @@ export default function InsightsScreen() {
 
     async function loadInsights() {
       try {
-        const [latestReadings, occupancy, nextRecommendation] = await Promise.all([
-          getApi<SensorReading[]>('/api/sensors'),
-          postApi<OccupancyPrediction>('/api/ai/predict', { zoneId: 1, horizonMinutes: 120 }),
-          postApi<Recommendation>('/api/ai/recommend', { zoneId: 1 }),
+        const latestReadings = await getApi<SensorReading[]>('/api/sensors');
+        const nextReadings = latestReadings.length ? latestReadings : fallbackReadings;
+        const zoneId = nextReadings[0]?.zoneId ?? 1;
+        const [occupancy, nextRecommendation] = await Promise.all([
+          postApi<OccupancyPrediction>('/api/ai/predict', { zoneId, horizonMinutes: 120 }),
+          postApi<Recommendation>('/api/ai/recommend', { zoneId }),
         ]);
 
         if (mounted) {
-          setReadings(latestReadings.length ? latestReadings : fallbackReadings);
+          setReadings(nextReadings);
           setPrediction(occupancy);
           setRecommendation(nextRecommendation);
         }

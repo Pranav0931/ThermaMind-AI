@@ -1,7 +1,10 @@
 import { Platform } from 'react-native';
 import { io } from 'socket.io-client';
 
-export const SERVER_URL = Platform.OS === 'android' ? 'http://172.16.200.114:4000' : 'http://172.16.200.114:4000';
+declare const process: { env?: { EXPO_PUBLIC_API_URL?: string } };
+
+const DEFAULT_SERVER_URL = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+export const SERVER_URL = process.env?.EXPO_PUBLIC_API_URL ?? DEFAULT_SERVER_URL;
 
 export interface SensorReading {
   id: number;
@@ -71,6 +74,58 @@ export interface Recommendation {
   co2Trend: string;
   applied?: boolean;
   createdAt?: string;
+}
+
+export interface HvacOptimization {
+  action: string;
+  newSetpoint: number;
+  fanSpeed: number;
+  predictedSavings: number;
+  efficiencyScore: number;
+}
+
+export interface DemandPrediction {
+  predictedLoadKw: number;
+  optimalLoadKw: number;
+  savings: number;
+}
+
+export interface OccupancyPrediction {
+  predictions: number[];
+  confidence: number;
+}
+
+export interface AnomalyResult {
+  isAnomaly: boolean;
+  score: number;
+  type: string;
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+}
+
+export interface DashboardAIResult {
+  zoneId: number;
+  reading: SensorReading;
+  occupancy: OccupancyPrediction;
+  demand: DemandPrediction;
+  anomaly: AnomalyResult;
+  optimization: HvacOptimization;
+  recommendation: Recommendation;
+  energy?: {
+    efficiency: number;
+    load: number;
+    coolingScore: number;
+    carbonSaved: number;
+    fanSpeed: number;
+    compressorEff: number;
+    timestamp: string;
+  };
+}
+
+export interface SchedulePolicyResult {
+  policyUpdated: boolean;
+  trainingSamples: number;
+  optimization: HvacOptimization;
 }
 
 export interface SimulationResult {

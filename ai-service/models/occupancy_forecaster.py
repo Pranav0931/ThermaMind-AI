@@ -72,7 +72,7 @@ def _load() -> OccupancyNetwork | None:
     global _model, _normalizer
     if not ARTIFACT.exists():
         return None
-    payload = torch.load(ARTIFACT, map_location="cpu")
+    payload = torch.load(ARTIFACT, map_location="cpu", weights_only=False)
     model = OccupancyNetwork(input_size=int(payload["input_size"]))
     model.load_state_dict(payload["state_dict"])
     _model = model.eval()

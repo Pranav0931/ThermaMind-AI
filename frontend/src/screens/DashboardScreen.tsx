@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, TextInput, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,12 +7,14 @@ import { BlurView } from 'expo-blur';
 import AmbientGlow from '../components/AmbientGlow';
 import {
   Alert,
+  DashboardAIResult,
   EnergyStats,
   SensorReading,
   createRealtimeSocket,
   fallbackEnergyStats,
   fallbackReadings,
   getApi,
+  postApi,
 } from '../services/thermamindApi';
 
 const { width } = Dimensions.get('window');
@@ -24,6 +26,15 @@ export default function DashboardScreen() {
   const [energyStats, setEnergyStats] = useState<EnergyStats>(fallbackEnergyStats);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [airflowHistory, setAirflowHistory] = useState<number[]>([48, 80, 96, 64, 112, 72, 88]);
+  const [inputZoneId, setInputZoneId] = useState(1);
+  const [manualInput, setManualInput] = useState({
+    occupancy: '12',
+    temperature: '22.4',
+    humidity: '48',
+    co2: '410',
+  });
+  const [aiResult, setAiResult] = useState<DashboardAIResult | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
   const activeAlert = alerts[0];
   const zones = readings.length > 0 ? readings : fallbackReadings;
@@ -32,6 +43,58 @@ export default function DashboardScreen() {
   const tertiary = zones[2] ?? fallbackReadings[2];
   const systemStable = energyStats.efficiency >= 90 && !alerts.some(alert => alert.severity === 'critical');
   const airflowBars = useMemo(() => airflowHistory.slice(-7), [airflowHistory]);
+  const selectedZone = zones.find(zone => zone.zoneId === inputZoneId) ?? primary;
+  const aiRecommendation = aiResult?.recommendation.message;
+
+  function updateManualInput(key: keyof typeof manualInput, value: string) {
+    setManualInput(current => ({ ...current, [key]: value }));
+  }
+
+  function fillFromLiveReading(zone: SensorReading = selectedZone) {
+    setInputZoneId(zone.zoneId);
+    setManualInput({
+      occupancy: String(zone.occupancy),
+      temperature: zone.temperature.toFixed(1),
+      humidity: String(Math.round(zone.humidity)),
+      co2: String(Math.round(zone.co2)),
+    });
+  }
+
+  async function runAiEvaluation() {
+    setIsEvaluating(true);
+    try {
+      const result = await postApi<DashboardAIResult>('/api/ai/evaluate', {
+        zoneId: inputZoneId,
+        occupancy: Number(manualInput.occupancy),
+        temperature: Number(manualInput.temperature),
+        humidity: Number(manualInput.humidity),
+        co2: Number(manualInput.co2),
+        airflow: selectedZone.airflow,
+      });
+      setAiResult(result);
+      setReadings(current => {
+        const next = current.filter(reading => reading.zoneId !== result.reading.zoneId);
+        return [result.reading, ...next].sort((a, b) => a.zoneId - b.zoneId);
+      });
+      setAirflowHistory(history => [...history.slice(-6), Math.max(24, Math.min(120, result.optimization.fanSpeed * 1.25))]);
+      if (result.energy) {
+        setEnergyStats(current => ({
+          ...current,
+          currentLoad: result.energy?.load ?? current.currentLoad,
+          efficiency: result.energy?.efficiency ?? current.efficiency,
+          coolingScore: result.energy?.coolingScore ?? current.coolingScore,
+          carbonSaved: result.energy?.carbonSaved ?? current.carbonSaved,
+          fanSpeed: result.optimization.fanSpeed,
+          compressorEff: result.energy?.compressorEff ?? current.compressorEff,
+          timestamp: result.energy?.timestamp ?? current.timestamp,
+        }));
+      }
+    } catch {
+      setAiResult(null);
+    } finally {
+      setIsEvaluating(false);
+    }
+  }
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -132,6 +195,84 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        <View style={styles.aiInputPanel}>
+          <View style={styles.aiInputHeader}>
+            <View>
+              <Text style={styles.cardLabel}>AI MODEL INPUT</Text>
+              <Text style={styles.cardTitle}>Live Scenario</Text>
+            </View>
+            <TouchableOpacity style={styles.syncBtn} onPress={() => fillFromLiveReading()}>
+              <MaterialIcons name="sync" size={18} color="#8aebff" />
+              <Text style={styles.syncBtnText}>Live</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.zoneSelector}>
+            {zones.map(zone => (
+              <TouchableOpacity
+                key={zone.zoneId}
+                style={[styles.zoneChip, inputZoneId === zone.zoneId && styles.zoneChipActive]}
+                onPress={() => fillFromLiveReading(zone)}
+              >
+                <Text style={[styles.zoneChipText, inputZoneId === zone.zoneId && styles.zoneChipTextActive]}>{zone.zoneName}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.inputGrid}>
+            {[
+              ['occupancy', 'Occupancy'],
+              ['temperature', 'Temp C'],
+              ['humidity', 'Humidity %'],
+              ['co2', 'CO2 ppm'],
+            ].map(([key, label]) => (
+              <View key={key} style={styles.inputBox}>
+                <Text style={styles.inputLabel}>{label}</Text>
+                <TextInput
+                  value={manualInput[key as keyof typeof manualInput]}
+                  onChangeText={value => updateManualInput(key as keyof typeof manualInput, value)}
+                  keyboardType="numeric"
+                  style={styles.textInput}
+                  placeholderTextColor="rgba(187, 201, 205, 0.45)"
+                />
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.evaluateBtn} onPress={runAiEvaluation} disabled={isEvaluating}>
+            <LinearGradient colors={['#8aebff', '#4edea3']} style={styles.evaluateBtnGradient}>
+              {isEvaluating ? <ActivityIndicator color="#00363e" /> : <Text style={styles.evaluateBtnText}>Run AI Models</Text>}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {aiResult && (
+            <View style={styles.aiResultPanel}>
+              <View style={styles.aiResultRow}>
+                <View style={styles.aiResultCell}>
+                  <Text style={styles.aiResultLabel}>RL Action</Text>
+                  <Text style={styles.aiResultValue}>{aiResult.optimization.action.replace('_', ' ')}</Text>
+                </View>
+                <View style={styles.aiResultCell}>
+                  <Text style={styles.aiResultLabel}>Airflow</Text>
+                  <Text style={styles.aiResultValue}>{aiResult.optimization.fanSpeed}%</Text>
+                </View>
+              </View>
+              <View style={styles.aiResultRow}>
+                <View style={styles.aiResultCell}>
+                  <Text style={styles.aiResultLabel}>Load</Text>
+                  <Text style={styles.aiResultValue}>{aiResult.demand.predictedLoadKw} kW</Text>
+                </View>
+                <View style={styles.aiResultCell}>
+                  <Text style={styles.aiResultLabel}>Savings</Text>
+                  <Text style={styles.aiResultValue}>{aiResult.demand.savings}%</Text>
+                </View>
+              </View>
+              <Text style={styles.aiResultMessage}>{aiResult.recommendation.message}</Text>
+            </View>
+          )}
+
+        </View>
+
         {/* Zonal Cards */}
         {/* Card 1 */}
         <View style={styles.glassCard}>
@@ -181,7 +322,7 @@ export default function DashboardScreen() {
 
           <View style={styles.alertBox}>
             <MaterialIcons name="auto-awesome" size={20} color="#4edea3" />
-            <Text style={styles.alertText}>{activeAlert?.message ?? `${primary.zoneName} is operating inside target climate bands.`}</Text>
+            <Text style={styles.alertText}>{aiRecommendation ?? activeAlert?.message ?? `${primary.zoneName} is operating inside target climate bands.`}</Text>
           </View>
         </View>
 
@@ -339,6 +480,133 @@ const styles = StyleSheet.create({
   titleSection: {
     marginBottom: 24,
     gap: 4,
+  },
+  aiInputPanel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(138, 235, 255, 0.18)',
+    marginBottom: 24,
+    gap: 16,
+  },
+  aiInputHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  syncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(138, 235, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(138, 235, 255, 0.25)',
+  },
+  syncBtnText: {
+    color: '#8aebff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  zoneSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  zoneChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  zoneChipActive: {
+    backgroundColor: 'rgba(78, 222, 163, 0.15)',
+    borderColor: 'rgba(78, 222, 163, 0.4)',
+  },
+  zoneChipText: {
+    color: '#bbc9cd',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  zoneChipTextActive: {
+    color: '#4edea3',
+  },
+  inputGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  inputBox: {
+    flexGrow: 1,
+    flexBasis: width > 520 ? '23%' : '47%',
+    backgroundColor: 'rgba(0,0,0,0.24)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    padding: 12,
+  },
+  inputLabel: {
+    color: '#bbc9cd',
+    fontSize: 12,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  textInput: {
+    color: '#e0e3e6',
+    fontSize: 18,
+    fontWeight: '700',
+    padding: 0,
+  },
+  evaluateBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  evaluateBtnGradient: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  evaluateBtnText: {
+    color: '#00363e',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  aiResultPanel: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 14,
+    gap: 10,
+  },
+  aiResultRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  aiResultCell: {
+    flex: 1,
+    backgroundColor: 'rgba(78, 222, 163, 0.08)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  aiResultLabel: {
+    color: '#bbc9cd',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  aiResultValue: {
+    color: '#e0e3e6',
+    fontSize: 16,
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+  aiResultMessage: {
+    color: '#8aebff',
+    fontSize: 14,
+    lineHeight: 20,
   },
   mainTitle: {
     fontSize: 40,

@@ -7,7 +7,7 @@ from models.anomaly_detector import detect_anomaly
 from models.demand_predictor import predict_demand
 from models.occupancy_forecaster import predict_occupancy
 from models.recommendation_engine import recommend
-from models.rl_optimizer import optimize_hvac
+from models.rl_optimizer import adapt_policy_to_schedule, optimize_hvac
 
 
 app = FastAPI(title="ThermaMind AI Service", version="1.0.0")
@@ -32,6 +32,11 @@ class AnomalyRequest(ZoneRequest):
 class OptimizeRequest(ZoneRequest):
     current_state: dict = Field(default_factory=dict)
     target: dict = Field(default_factory=dict)
+
+
+class ScheduleTrainRequest(ZoneRequest):
+    schedule: dict = Field(default_factory=dict)
+    current_state: dict = Field(default_factory=dict)
 
 
 @app.get("/health")
@@ -64,6 +69,11 @@ def anomaly(request: AnomalyRequest) -> dict:
 @app.post("/optimize/hvac")
 def optimize(request: OptimizeRequest) -> dict:
     return optimize_hvac(request.zone_id, request.current_state, request.target)
+
+
+@app.post("/train/rl")
+def train_rl(request: ScheduleTrainRequest) -> dict:
+    return adapt_policy_to_schedule(request.zone_id, request.schedule, request.current_state)
 
 
 @app.post("/recommend")

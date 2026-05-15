@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { io } from 'socket.io-client';
 
-export const SERVER_URL = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+export const SERVER_URL = Platform.OS === 'android' ? 'http://172.16.200.114:4000' : 'http://172.16.200.114:4000';
 
 export interface SensorReading {
   id: number;

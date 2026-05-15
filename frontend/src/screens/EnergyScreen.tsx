@@ -139,8 +139,8 @@ export default function EnergyScreen() {
                   <Stop offset="100%" stopColor="#4edea3" stopOpacity="1" />
                 </SvgLinearGradient>
               </Defs>
-              <Path d={standardPath} fill="none" opacity="0.5" stroke="#bbc9cd" strokeDasharray="4 4" strokeWidth="2" />
-              <Path d={optimizedPath} fill="none" stroke="url(#gradient)" strokeLinecap="round" strokeWidth="4" />
+              <Path d={standardPath} fill="none" opacity={0.5} stroke="#bbc9cd" strokeDasharray={[4, 4]} strokeWidth={2} />
+              <Path d={optimizedPath} fill="none" stroke="url(#gradient)" strokeLinecap="round" strokeWidth={4} />
             </Svg>
             <View style={styles.chartOverlayTop}>
               <Text style={styles.chartOverlayText}>Standard HVAC Usage</Text>
